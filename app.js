@@ -60,7 +60,7 @@ const Store = {
 const state = {
   view:'collection', speciesId:null, classFilter:null, categoryFilter:null, habitatFilter:null,
   query:'', sort:'guide', searchOpen:false,
-  rotate:0, zoomIdx:1, scopeOn:false, autoRotateTimer:null,
+  rotate:0, zoomIdx:1, scopeOn:false, autoRotateTimer:null, show3D:false,
   compare: Store.getCompare(), sidebarOpen:false, detailOpenMobile:false,
   openGroups:{Insects:true, Birds:true},
   quote: QUOTES[Math.floor(Math.random()*QUOTES.length)],
@@ -87,7 +87,7 @@ function parseRoute(){
 function go(hash){ location.hash = hash; }
 window.addEventListener('hashchange', ()=>{ parseRoute(); resetViewerState(); render(); });
 
-function resetViewerState(){ state.rotate=0; state.zoomIdx=1; state.scopeOn=false; stopAutoRotate(); }
+function resetViewerState(){ state.rotate=0; state.zoomIdx=1; state.scopeOn=false; state.show3D=false; stopAutoRotate(); }
 
 /* ---------- App (exposed for inline onclick handlers) ---------- */
 const App = {
@@ -141,6 +141,11 @@ const App = {
   },
   rotateReset(){ state.rotate = 0; state.zoomIdx=1; applyViewerTransform(); },
   rotateFromSlider(val){ state.rotate = parseInt(val,10); applyViewerTransform(); },
+  toggleCube(){
+    const sp = byId(state.speciesId);
+    if(sp && sp.model){ state.show3D = !state.show3D; renderMain(); }
+    else{ App.toggleAutoRotate(); }
+  },
   toggleAutoRotate(){
     if(state.autoRotateTimer){ stopAutoRotate(); }
     else{
@@ -240,6 +245,33 @@ const App = {
     }
   },
 
+  showModelInfo(){
+    closeAnyMenu();
+    $('#modelInfoModal').innerHTML = `
+      <div class="compare-modal-head"><h2 style="font-size:18px;">${icon('cube',18)} Add a real 3D model</h2><button onclick="App.closeModelInfo()">${icon('close',20)}</button></div>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.65;">
+        Open <code>data.js</code>, find the species object you want, and add one <code>model</code> line. No other code changes needed \u2014 the viewer picks it up automatically and shows a real, orbit-able 3D model instead of the photo.
+      </p>
+      <p style="font-size:12px;font-weight:700;margin-top:14px;margin-bottom:6px;">Option A \u2014 Sketchfab (easiest, nothing to host)</p>
+      <div class="code-block">model: { type:'sketchfab', id:'2b5e1e1a4a...' },</div>
+      <p style="font-size:12px;color:var(--ink-soft);margin-top:8px;line-height:1.6;">
+        Go to sketchfab.com, search the species, filter results by <strong>Downloadable</strong> (usually means embeddable/CC-licensed), open a model, click <strong>Embed</strong>, and copy the 32-character ID from the embed URL
+        (<span style="white-space:nowrap;">sketchfab.com/models/<u>THIS PART</u>/embed</span>). Credit the artist per the license shown on the model page.
+      </p>
+      <p style="font-size:12px;font-weight:700;margin-top:14px;margin-bottom:6px;">Option B \u2014 self-hosted glTF/GLB file</p>
+      <div class="code-block">model: { type:'glb', url:'models/honeybee.glb' },</div>
+      <p style="font-size:12px;color:var(--ink-soft);margin-top:8px;line-height:1.6;">
+        Any direct URL to a <code>.glb</code>/<code>.gltf</code> file works \u2014 a relative path to a file you place next to <code>index.html</code>, or a link to one hosted elsewhere. This renders through
+        Google's <code>&lt;model-viewer&gt;</code>, already loaded in <code>index.html</code>, with full drag-to-orbit and auto-rotate built in.
+      </p>
+      <p style="font-size:12px;color:var(--ink-soft);margin-top:12px;line-height:1.6;">
+        <strong>Where to find real models:</strong> Sketchfab (large free/CC library), Smithsonian 3D (si.edu/3d \u2014 public-domain specimen scans), or CGTrader/TurboSquid for paid, higher-detail work. Always check the license before self-hosting a file \u2014 Sketchfab embeds inherit the creator's permitted usage automatically, which is why it's the easiest starting point.
+      </p>
+    `;
+    $('#modelInfoWrap').classList.add('show');
+  },
+  closeModelInfo(){ $('#modelInfoWrap').classList.remove('show'); },
+
   openAR(){ openARModal(); },
   closeAR(){ closeARModal(); },
   arGrow(){ arSize = Math.min(320, arSize+24); const s=$('#arSticker'); if(s) s.style.width=arSize+'px'; },
@@ -327,6 +359,7 @@ function toggleSpeciesMoreMenu(){
   buildDropdown(btn, `
     <button onclick="App.copyDetails()">${icon('notebook',16)} Copy field guide entry</button>
     <button onclick="App.printPage()">${icon('download',16)} Print / save as PDF</button>
+    <button onclick="App.showModelInfo()">${icon('cube',16)} Add a real 3D model</button>
     ${extra}
   `);
 }
@@ -335,6 +368,7 @@ function toggleAppMoreMenu(){
   const btn = $('#sidebarMoreBtn'); if(!btn) return;
   buildDropdown(btn, `
     <button onclick="App.showAbout()">${icon('info',16)} About this guide</button>
+    <button onclick="App.showModelInfo()">${icon('cube',16)} Add a real 3D model</button>
     <button onclick="App.clearNotebookData()">${icon('close',16)} Clear my saved notes</button>
   `);
 }
@@ -592,10 +626,7 @@ function notesTemplate(){
 function detailTemplate(id){
   const sp = byId(id);
   if(!sp){ return collectionTemplate(); }
-  const cat = catInfo(sp.category);
-  const imgBlock = sp.verified && sp.img
-    ? `<img class="viewer-img" id="viewerImg" src="${sp.img}" alt="${sp.name}" onerror="renderPlaceholderInViewer()">`
-    : placeholderArtHtml(sp);
+  const showingModel = state.show3D && sp.model;
   return `
     <div class="topbar">
       <button class="back-link" onclick="App.backToCollection()"><span style="display:inline-flex;transform:scaleX(-1);">${icon('chevron',16)}</span> Back to Collection</button>
@@ -616,22 +647,56 @@ function detailTemplate(id){
 
     <div class="viewer">
       <div class="viewer-stage">
-        <div class="viewer-img-wrap" id="viewerImgWrap">${imgBlock}</div>
-        <div class="viewer-side">
-          <button class="side-btn ${state.autoRotateTimer?'active':''}" onclick="App.toggleAutoRotate()">${icon('cube',18)}<span>3D</span></button>
-          <button class="side-btn ${state.zoomIdx!==1?'active':''}" onclick="App.cycleZoom()">${icon('ruler',18)}<span>Size</span></button>
-          <button class="side-btn ${state.scopeOn?'active':''}" onclick="App.toggleScope()">${icon('crosshair',18)}<span>Scope</span></button>
-          <button class="side-btn" onclick="App.openAR()">${icon('camera',18)}<span>AR View</span></button>
-        </div>
+        ${showingModel ? modelEmbedHtml(sp) : `<div class="viewer-img-wrap" id="viewerImgWrap">${photoOrPlaceholderHtml(sp)}</div>`}
+        <div class="viewer-side">${sideButtonsHtml(sp)}</div>
       </div>
     </div>
+    ${showingModel ? `
+    <div class="viewer-bottom">
+      <span class="viewer-mode-pill">${icon('cube',13)} Real 3D model \u2014 drag to orbit</span>
+      <button class="round-btn" onclick="App.toggleCube()" title="Back to photo">${icon('close',15)}</button>
+    </div>` : `
     <div class="viewer-bottom">
       <button class="round-btn" onclick="App.rotateReset()" title="Reset">${icon('reset',16)}</button>
       <span class="deg-pill" id="degPill">${state.rotate}\u00b0</span>
       <input type="range" min="-180" max="180" value="${state.rotate}" class="rotate-slider" id="rotateSlider" oninput="App.rotateFromSlider(this.value)">
       <button class="round-btn" onclick="App.openFullscreen()" title="Fullscreen">${icon('fullscreen',15)}</button>
-    </div>
+    </div>`}
     <div class="quote-strip"><span class="qtext">\u201c${state.quote}\u201d</span><button onclick="App.shuffleQuote()" title="New quote">${icon('shuffle',13)}</button></div>
+  `;
+}
+
+function photoOrPlaceholderHtml(sp){
+  return sp.verified && sp.img
+    ? `<img class="viewer-img" id="viewerImg" src="${sp.img}" alt="${sp.name}" onerror="renderPlaceholderInViewer()">`
+    : placeholderArtHtml(sp);
+}
+
+function modelEmbedHtml(sp){
+  const m = sp.model;
+  if(m && m.type === 'sketchfab'){
+    return `<div class="model-embed-wrap">
+      <span class="model-badge">${icon('cube',12)} Sketchfab 3D model</span>
+      <iframe title="${sp.name} 3D model" src="https://sketchfab.com/models/${m.id}/embed?autostart=1&transparent=1&ui_theme=dark"
+        allow="autoplay; fullscreen; xr-spatial-tracking" xr-spatial-tracking></iframe>
+    </div>`;
+  }
+  if(m && m.type === 'glb'){
+    return `<div class="model-embed-wrap">
+      <span class="model-badge">${icon('cube',12)} 3D model</span>
+      <model-viewer src="${m.url}" camera-controls auto-rotate shadow-intensity="1" alt="${sp.name} 3D model"></model-viewer>
+    </div>`;
+  }
+  return `<div class="viewer-img-wrap" id="viewerImgWrap">${photoOrPlaceholderHtml(sp)}</div>`;
+}
+
+function sideButtonsHtml(sp){
+  const hasModel = !!(sp && sp.model);
+  return `
+    <button class="side-btn ${(state.show3D&&hasModel)||state.autoRotateTimer?'active':''}" onclick="App.toggleCube()" title="${hasModel?'Toggle real 3D model':'Auto-rotate (no 3D model linked \u2014 see More menu)'}">${icon('cube',18)}<span>3D</span></button>
+    <button class="side-btn ${state.zoomIdx!==1?'active':''}" onclick="App.cycleZoom()">${icon('ruler',18)}<span>Size</span></button>
+    <button class="side-btn ${state.scopeOn?'active':''}" onclick="App.toggleScope()">${icon('crosshair',18)}<span>Scope</span></button>
+    <button class="side-btn" onclick="App.openAR()">${icon('camera',18)}<span>AR View</span></button>
   `;
 }
 
@@ -661,12 +726,7 @@ function afterDetailRender(){
 function renderSideButtons(){
   const sp = byId(state.speciesId); if(!sp) return;
   const wrap = $('.viewer-side'); if(!wrap) return;
-  wrap.innerHTML = `
-    <button class="side-btn ${state.autoRotateTimer?'active':''}" onclick="App.toggleAutoRotate()">${icon('cube',18)}<span>3D</span></button>
-    <button class="side-btn ${state.zoomIdx!==1?'active':''}" onclick="App.cycleZoom()">${icon('ruler',18)}<span>Size</span></button>
-    <button class="side-btn ${state.scopeOn?'active':''}" onclick="App.toggleScope()">${icon('crosshair',18)}<span>Scope</span></button>
-    <button class="side-btn" onclick="App.openAR()">${icon('camera',18)}<span>AR View</span></button>
-  `;
+  wrap.innerHTML = sideButtonsHtml(sp);
 }
 
 /* ---------------- DETAIL PANEL (right column) ---------------- */
@@ -801,6 +861,7 @@ document.addEventListener('keydown', e=>{
   if($('#lightbox').classList.contains('show')) return App.closeLightbox();
   if($('#arModal').classList.contains('show')) return App.closeAR();
   if($('#compareModalWrap').classList.contains('show')) return App.closeCompare();
+  if($('#modelInfoWrap').classList.contains('show')) return App.closeModelInfo();
   if($('#aboutModalWrap').classList.contains('show')) return App.closeAbout();
   if($('#notebookDrawer').classList.contains('show')) return App.closeNotebook();
   if(state.detailOpenMobile) return App.toggleDetailMobile(false);
