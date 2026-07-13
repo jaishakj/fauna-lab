@@ -6,6 +6,7 @@
 <title>Fauna Lab — Explore. Learn. Protect.</title>
 <meta name="description" content="An interactive field guide to insects and birds.">
 <link rel="stylesheet" href="style.css">
+<script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
 </head>
 <body>
 
@@ -32,6 +33,11 @@
   <div class="compare-tray hide" id="compareTray"></div>
   <div class="compare-modal-wrap" id="compareModalWrap" onclick="if(event.target===this) App.closeCompare()">
     <div class="compare-modal" id="compareModal"></div>
+  </div>
+
+  <!-- 3D model info modal -->
+  <div class="compare-modal-wrap" id="modelInfoWrap" onclick="if(event.target===this) App.closeModelInfo()">
+    <div class="compare-modal" id="modelInfoModal" style="max-width:560px;"></div>
   </div>
 
   <!-- About modal -->
