@@ -1,633 +1,875 @@
 /* ============================================================
-   FAUNA LAB — DATA FILE
-   ------------------------------------------------------------
-   All species content lives here. To swap an image, just
-   replace the `img` value with any working image URL.
-
-   IMAGE SOURCING NOTE (read this before deploying):
-   8 species below carry a `verified: true` flag — their `img`
-   field is a real photo hot-linked from Wikimedia Commons,
-   confirmed by hand while building this file. The other 42
-   have `verified: false` and ship with a generated illustrated
-   placeholder (see app.js renderCreatureArt) instead of a
-   hot-linked photo, because I couldn't manually confirm a
-   working Commons file name for each one without an enormous
-   number of lookups. Every entry still carries a real
-   `commonsQuery` — the app turns this into a live "Find a
-   photo on Wikimedia Commons" link on the detail page so you
-   (or anyone) can grab a real photo and paste its URL into
-   the `img` field in about 10 seconds. Flip `verified` to
-   true once you do.
+   FAUNA LAB — APP LOGIC
    ============================================================ */
+(function(){
+"use strict";
 
-const CATEGORIES = [
-  { key: 'bees',        label: 'Bees',              class: 'Insects', icon: 'bee' },
-  { key: 'butterflies', label: 'Butterflies',       class: 'Insects', icon: 'butterfly' },
-  { key: 'moths',       label: 'Moths',             class: 'Insects', icon: 'moth' },
-  { key: 'beetles',     label: 'Beetles',           class: 'Insects', icon: 'beetle' },
-  { key: 'dragonflies', label: 'Dragonflies',       class: 'Insects', icon: 'dragonfly' },
-  { key: 'wasps',       label: 'Wasps',             class: 'Insects', icon: 'wasp' },
-  { key: 'ants',        label: 'Ants',              class: 'Insects', icon: 'ant' },
-  { key: 'hummingbirds',label: 'Hummingbirds',      class: 'Birds',   icon: 'hummingbird' },
-  { key: 'songbirds',   label: 'Songbirds',         class: 'Birds',   icon: 'songbird' },
-  { key: 'raptors',     label: 'Raptors',           class: 'Birds',   icon: 'raptor' },
-  { key: 'owls',        label: 'Owls',              class: 'Birds',   icon: 'owl' },
-  { key: 'waterfowl',   label: 'Waterfowl',         class: 'Birds',   icon: 'waterfowl' },
+/* ---------- helpers ---------- */
+const $ = (sel, el=document) => el.querySelector(sel);
+const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
+const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+const byId = id => SPECIES.find(s => s.id === id);
+const catInfo = key => CATEGORIES.find(c => c.key === key);
+const hashOf = s => s.split('#')[1] ? '#'+s.split('#')[1] : s;
+
+function strHash(str){ let h=0; for(let i=0;i<str.length;i++){ h = (h*31 + str.charCodeAt(i)) >>> 0; } return h; }
+
+const CHIP_PALETTE = [
+  {bg:'#DCEAF3', ink:'#3E6E93'}, {bg:'#E1EFDD', ink:'#4A7A3E'},
+  {bg:'#F5DEDC', ink:'#A24B3E'}, {bg:'#F3E7C4', ink:'#8A6B1E'},
+  {bg:'#E7DFF3', ink:'#6B4FA0'}, {bg:'#E8D9C8', ink:'#7A5231'},
 ];
-
-const CDN = (file) => `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file).replace(/%2C/g, ',')}?width=1200`;
-
-const SPECIES = [
-// ---------------------------------------------------------- BEES
-{
-  id:'western-honey-bee', guideNo:1, name:'Western Honey Bee', sci:'Apis mellifera',
-  class:'Insects', category:'bees', family:'Apidae', tags:['Social','Pollinator'],
-  details:'A eusocial bee that lives in colonies of up to 80,000 workers built around a single queen. Native to Europe, Africa and the Middle East, it is now the most widely kept bee on Earth.',
-  traits:'Communicates food locations to nestmates through the waggle dance and round dance, converting the distance and direction of a food source into a repeatable pattern of movement.',
-  diet:'Forages nectar and pollen from a huge range of flowering plants, converting nectar into honey for winter stores.',
-  range:'Native to Europe, Africa and western Asia; introduced to every continent except Antarctica.',
-  role:'The single most economically important managed pollinator, supporting an estimated tens of billions of dollars in global crop production each year.',
-  habitat:'Farmland & Gardens', funFact:'A worker bee visits up to 100 flowers on a single foraging trip and can fly roughly 8 km/h.',
-  verified:true, img:CDN('Apis mellifera 2 Luc Viatour.JPG'), imgCredit:'Wikimedia Commons — Luc Viatour',
-  imgSource:'https://commons.wikimedia.org/wiki/Category:Featured_pictures_of_Apis_mellifera', commonsQuery:'Apis mellifera'
-},
-{
-  id:'buff-tailed-bumblebee', guideNo:2, name:'Buff-tailed Bumblebee', sci:'Bombus terrestris',
-  class:'Insects', category:'bees', family:'Apidae', tags:['Social','Cold-tolerant'],
-  details:'A large, thickset bumblebee covered in dense hair that lets it forage in cooler, cloudier weather than most bees can tolerate.',
-  traits:'Uses buzz pollination — vibrating its flight muscles at a specific frequency to shake pollen loose from flowers like tomatoes, which honey bees cannot do.',
-  diet:'Generalist forager on a wide range of wildflowers and crops, with a preference for open, tubular blooms.',
-  range:'Native across Europe and western Asia; commercially introduced to South America, Japan and elsewhere for greenhouse pollination.',
-  role:'A key early-season pollinator, active from very early spring before most other bees emerge.',
-  habitat:'Meadows & Gardens', funFact:'A queen can single-handedly found an entire colony after waking alone from winter hibernation.',
-  verified:true, img:CDN('Buff-tailed bumblebee (Bombus terrestris) 2.jpg'), imgCredit:'Wikimedia Commons',
-  imgSource:'https://commons.wikimedia.org/wiki/Category:Bombus_terrestris', commonsQuery:'Bombus terrestris'
-},
-{
-  id:'orchid-bee', guideNo:3, name:'Orchid Bee', sci:'Euglossa dilemma',
-  class:'Insects', category:'bees', family:'Apidae', tags:['Solitary','Iridescent'],
-  details:'A brilliantly metallic green bee named for the males\u2019 habit of collecting fragrance compounds from orchids and other scented sources.',
-  traits:'Males store collected scent chemicals in pouches on their hind legs and release them during courtship display, a behavior found in almost no other bee group.',
-  diet:'Females feed on nectar and pollen from a wide range of tropical flowers; males also visit rotting fruit and fungi to gather aroma compounds.',
-  range:'Native to Central America and Mexico; established in Florida since the early 2000s.',
-  role:'A specialist pollinator of orchids, many of which have evolved shapes that fit only euglossine bees.',
-  habitat:'Tropical Forest', funFact:'Their metallic sheen comes from microscopic layered structures in the exoskeleton, not pigment.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Euglossa dilemma'
-},
-{
-  id:'alfalfa-leafcutter-bee', guideNo:4, name:'Alfalfa Leafcutter Bee', sci:'Megachile rotundata',
-  class:'Insects', category:'bees', family:'Megachilidae', tags:['Solitary','Fast-flying'],
-  details:'A small solitary bee that neatly slices circular and oval pieces from leaves to build cigar-shaped brood cells inside tunnels and cavities.',
-  traits:'Carries pollen on a dense brush of hair under its abdomen rather than on its legs, making it a notably efficient pollen mover per visit.',
-  diet:'Specializes in legume flowers, especially alfalfa, whose tripping mechanism most other bees avoid.',
-  range:'Native to Eurasia; introduced to North America where it is now the primary managed pollinator of alfalfa seed crops.',
-  role:'Manages pollination on a huge share of commercial alfalfa seed production, often housed in purpose-built nesting boards.',
-  habitat:'Farmland', funFact:'A single female can complete her entire nest-building life cycle in about three to four weeks.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Megachile rotundata'
-},
-{
-  id:'violet-carpenter-bee', guideNo:5, name:'Violet Carpenter Bee', sci:'Xylocopa violacea',
-  class:'Insects', category:'bees', family:'Apidae', tags:['Solitary','Wood-nesting'],
-  details:'Europe\u2019s largest bee, with a stout black body and wings that flash deep violet-blue in direct sunlight.',
-  traits:'Chews tunnels into dead wood and soft timber with powerful mandibles to build a nest, rather than digging into soil like most solitary bees.',
-  diet:'Favors deep, tubular flowers such as wisteria and sage, and is strong enough to force open blooms that smaller bees cannot access.',
-  range:'Southern and central Europe, North Africa and parts of Asia.',
-  role:'An important pollinator of early-flowering trees and legumes thanks to its long flight season and large body size.',
-  habitat:'Woodland Edge & Gardens', funFact:'Despite its intimidating size, it is docile and very rarely stings unless directly handled.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Xylocopa violacea'
-},
-{
-  id:'blue-orchard-mason-bee', guideNo:6, name:'Blue Orchard Mason Bee', sci:'Osmia lignaria',
-  class:'Insects', category:'bees', family:'Megachilidae', tags:['Solitary','Orchard Pollinator'],
-  details:'A metallic blue-black bee that nests in narrow, pre-existing holes, sealing each brood cell behind a wall of mud.',
-  traits:'Flies at cooler temperatures and lower light levels than honey bees, making it active during the short, unpredictable weather windows of early spring bloom.',
-  diet:'A generalist forager but especially valuable on early tree fruit and nut blossom, including apple, cherry and almond.',
-  range:'Native across most of temperate North America.',
-  role:'A single female can pollinate as much fruit blossom as several hundred honey bee workers, thanks to her loose, messy pollen-carrying style.',
-  habitat:'Orchards & Gardens', funFact:'Commercial orchards now rent out cardboard nesting tubes of mason bee cocoons the way they rent honey bee hives.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Osmia lignaria'
-},
-
-// ---------------------------------------------------------- BUTTERFLIES
-{
-  id:'monarch-butterfly', guideNo:7, name:'Monarch Butterfly', sci:'Danaus plexippus',
-  class:'Insects', category:'butterflies', family:'Nymphalidae', tags:['Migratory','Toxic'],
-  details:'A large orange-and-black butterfly famous for a multigenerational migration spanning up to 4,800 km between North America and central Mexico.',
-  traits:'Caterpillars sequester toxic cardenolide compounds from milkweed, making both larvae and adults poisonous to most vertebrate predators.',
-  diet:'Caterpillars feed exclusively on milkweed; adults nectar on a wide range of wildflowers along their migratory corridor.',
-  range:'North America, with populations also established in Australia, New Zealand, and parts of Europe and the Pacific.',
-  role:'An indicator species for milkweed and grassland habitat health, and one of the most closely tracked insect migrations in the world.',
-  habitat:'Meadows & Migratory Corridors', funFact:'The generation that migrates south each fall can live up to eight months — ten times longer than a typical summer generation.',
-  verified:true, img:CDN('Monarch Butterfly (Danaus plexippus) - Guelph, Ontario.jpg'), imgCredit:'Wikimedia Commons',
-  imgSource:'https://commons.wikimedia.org/wiki/Category:Danaus_plexippus', commonsQuery:'Danaus plexippus'
-},
-{
-  id:'old-world-swallowtail', guideNo:8, name:'Old World Swallowtail', sci:'Papilio machaon',
-  class:'Insects', category:'butterflies', family:'Papilionidae', tags:['Diurnal','Fast-flying'],
-  details:'A large yellow-and-black butterfly with elegant tail streamers on its hindwings, among the most widespread swallowtails on the planet.',
-  traits:'Caterpillars defend themselves with an osmeterium — a forked, foul-smelling orange organ that pops out from behind the head when threatened.',
-  diet:'Caterpillars feed on plants in the carrot family, especially wild fennel and dill; adults nectar on thistles and other open flowers.',
-  range:'Found across Europe, temperate Asia, and North America north of the Arctic Circle.',
-  role:'A wide-ranging pollinator whose caterpillars are also a food source for birds, making it a mid-level link in many food webs.',
-  habitat:'Meadows & Grasslands', funFact:'It is the only swallowtail butterfly native to the British Isles, where it survives in just a few wetland strongholds.',
-  verified:true, img:CDN('Papilio machaon maiting.jpg'), imgCredit:'Wikimedia Commons',
-  imgSource:'https://commons.wikimedia.org/wiki/Category:Papilio_machaon', commonsQuery:'Papilio machaon'
-},
-{
-  id:'painted-lady', guideNo:9, name:'Painted Lady', sci:'Vanessa cardui',
-  class:'Insects', category:'butterflies', family:'Nymphalidae', tags:['Migratory','Cosmopolitan'],
-  details:'One of the most widely distributed butterflies in the world, found on every continent except Antarctica and South America.',
-  traits:'Undertakes a multi-generation migration between tropical Africa and the Arctic Circle, a round trip covering roughly 15,000 km that scientists only fully mapped using radar in the 2010s.',
-  diet:'Caterpillars feed on thistles and mallows among many other plants; adults nectar on an unusually broad range of flowers.',
-  range:'Nearly global, absent only from South America, Antarctica, and Australia.',
-  role:'A generalist pollinator whose mass migrations occasionally reach outbreak numbers visible on weather radar.',
-  habitat:'Open Country, Nearly Everywhere', funFact:'It is sometimes called the "cosmopolitan" butterfly for its almost worldwide range.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Vanessa cardui'
-},
-{
-  id:'blue-morpho', guideNo:10, name:'Blue Morpho', sci:'Morpho peleides',
-  class:'Insects', category:'butterflies', family:'Nymphalidae', tags:['Iridescent','Forest Canopy'],
-  details:'A large rainforest butterfly whose brilliant metallic-blue wings flash on and off in flight, an optical effect rather than pigment.',
-  traits:'Wing scales are structured with microscopic ridges that scatter light at specific wavelengths, a phenomenon called structural coloration.',
-  diet:'Caterpillars feed on legume foliage; adults favor fermenting fruit and tree sap over nectar.',
-  range:'Tropical forests of Central America and northern South America.',
-  role:'A dramatic example of anti-predator flash coloration, alternately flashing bright blue and camouflaged brown as it flies.',
-  habitat:'Tropical Rainforest', funFact:'The underside of its wings is dull brown with eyespots, making it nearly invisible the instant it lands and closes its wings.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Morpho peleides'
-},
-{
-  id:'red-admiral', guideNo:11, name:'Red Admiral', sci:'Vanessa atalanta',
-  class:'Insects', category:'butterflies', family:'Nymphalidae', tags:['Territorial','Migratory'],
-  details:'A fast, strong-flying butterfly with velvety black wings crossed by bold orange-red bands and white wingtip spots.',
-  traits:'Males stake out and defend sunlit territorial perches in late afternoon, chasing off rivals and even investigating passing birds.',
-  diet:'Caterpillars feed almost exclusively on nettles; adults are especially drawn to fermenting fruit, tree sap and, in autumn, garden flowers.',
-  range:'Europe, North Africa, Asia and North America.',
-  role:'A common and conspicuous garden pollinator, often one of the last butterflies still active in late autumn.',
-  habitat:'Gardens & Woodland Edges', funFact:'Northern populations migrate south for winter much like monarchs, though the journey is far less studied.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Vanessa atalanta'
-},
-{
-  id:'peacock-butterfly', guideNo:12, name:'Peacock Butterfly', sci:'Aglais io',
-  class:'Insects', category:'butterflies', family:'Nymphalidae', tags:['Hibernating','Startle Display'],
-  details:'A richly patterned reddish-brown butterfly named for the four enormous eyespots that dominate its wings.',
-  traits:'When threatened, it snaps its wings open and rubs them together to produce a hissing sound while flashing its eyespots — a combined visual and audio startle display.',
-  diet:'Caterpillars feed in large colonial groups on nettles; adults nectar on buddleia, thistles and other late-summer flowers.',
-  range:'Widespread across temperate Europe and Asia.',
-  role:'Overwinters as an adult in hollow trees, sheds and outbuildings, making it one of the first butterflies seen each spring.',
-  habitat:'Gardens & Woodland', funFact:'The eyespots are thought to mimic the eyes of a small owl closely enough to startle birds mid-attack.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Aglais io'
-},
-
-// ---------------------------------------------------------- MOTHS
-{
-  id:'garden-tiger-moth', guideNo:13, name:'Garden Tiger Moth', sci:'Arctia caja',
-  class:'Insects', category:'moths', family:'Erebidae', tags:['Nocturnal','Chemically Defended'],
-  details:'A large, boldly patterned moth with chocolate-and-cream marbled forewings that conceal vivid orange hindwings spotted with blue-black.',
-  traits:'When disturbed, it flashes its bright hindwings and can release a defensive fluid from glands behind its head, warning predators it is distasteful.',
-  diet:'Caterpillars — the densely bristled "woolly bear" — feed on a wide range of low-growing plants including nettle, dock and dandelion.',
-  range:'Temperate regions across Europe and North America.',
-  role:'A night-flying pollinator and an important food source for bats, though its bristly caterpillar is largely avoided by birds.',
-  habitat:'Gardens & Grassland', funFact:'Its caterpillar hair can cause skin irritation in some people, a defense that persists even after it becomes a moth.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Arctia caja'
-},
-{
-  id:'luna-moth', guideNo:14, name:'Luna Moth', sci:'Actias luna',
-  class:'Insects', category:'moths', family:'Saturniidae', tags:['Nocturnal','Non-feeding Adult'],
-  details:'A pale lime-green silk moth with long, elegantly trailing hindwing tails and a wingspan that can reach 11 cm.',
-  traits:'The trailing tails spin during flight to jam the echolocation calls of hunting bats, measurably improving the moth\u2019s odds of escape.',
-  diet:'Caterpillars feed on the leaves of walnut, hickory, sweetgum and birch; the short-lived adult has no functional mouthparts and never eats.',
-  range:'Deciduous forests of eastern North America.',
-  role:'A striking pollinator-adjacent presence in forest ecosystems and a favorite subject for citizen science moth surveys.',
-  habitat:'Deciduous Forest', funFact:'Adults live for about a week, existing only to mate — all of their energy was stored up during the caterpillar stage.',
-  verified:true, img:CDN('Actias luna in Florida.jpg'), imgCredit:'Wikimedia Commons',
-  imgSource:'https://commons.wikimedia.org/wiki/Category:Actias_luna', commonsQuery:'Actias luna'
-},
-{
-  id:'atlas-moth', guideNo:15, name:'Atlas Moth', sci:'Attacus atlas',
-  class:'Insects', category:'moths', family:'Saturniidae', tags:['Nocturnal','Giant'],
-  details:'One of the largest moths in the world by wing surface area, with wingtips shaped and patterned to resemble a snake\u2019s head.',
-  traits:'The snake-head wingtip pattern is thought to startle or deter birds and small predators when the moth flexes its wings.',
-  diet:'Caterpillars feed on a range of tropical trees including citrus and cinnamon relatives; adults, like luna moths, have no working mouthparts and do not feed.',
-  range:'Tropical and subtropical forests of South and Southeast Asia.',
-  role:'Its silk is harvested in parts of Asia for a coarse, durable textile distinct from commercial silkworm silk.',
-  habitat:'Tropical Forest', funFact:'A wingspan of up to 30 cm makes it one of the largest lepidopterans on Earth by wing area.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Attacus atlas'
-},
-{
-  id:'hummingbird-hawk-moth', guideNo:16, name:'Hummingbird Hawk-moth', sci:'Macroglossum stellatarum',
-  class:'Insects', category:'moths', family:'Sphingidae', tags:['Diurnal','Hovering'],
-  details:'A day-flying moth so often mistaken for a hummingbird that its name describes the confusion directly.',
-  traits:'Hovers in place while feeding by beating its wings roughly 70–80 times per second, unusually fast for a moth and comparable to a small hummingbird.',
-  diet:'Uses an exceptionally long proboscis to drink nectar from tubular flowers such as honeysuckle, jasmine and red valerian without landing.',
-  range:'Europe, North Africa and temperate Asia; strongly migratory, appearing well north of its breeding range most summers.',
-  role:'An efficient long-tongued pollinator of deep-throated flowers that shorter-tongued insects cannot reach.',
-  habitat:'Gardens & Meadows', funFact:'It can remember and revisit productive flowerbeds at the same time of day, showing a measurable sense of time.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Macroglossum stellatarum'
-},
-
-// ---------------------------------------------------------- BEETLES
-{
-  id:'seven-spot-ladybird', guideNo:17, name:'Seven-spot Ladybird', sci:'Coccinella septempunctata',
-  class:'Insects', category:'beetles', family:'Coccinellidae', tags:['Predator','Diurnal'],
-  details:'A glossy red beetle with seven black spots, among the most recognizable insects in the Northern Hemisphere.',
-  traits:'When threatened, it plays dead and releases a foul-tasting yellow fluid called reflex blood from its leg joints to deter predators.',
-  diet:'Both larvae and adults are voracious predators of aphids, with a single adult capable of eating dozens in a day.',
-  range:'Native across Europe, Asia and North Africa; introduced to North America for pest control.',
-  role:'One of the most effective natural aphid control agents in agriculture, reducing the need for chemical pesticides.',
-  habitat:'Gardens & Farmland', funFact:'Its bright red-and-black pattern is a textbook example of aposematic, or warning, coloration.',
-  verified:true, img:CDN('Seven Spotted-Ladybug - Coccinella septempunctata.jpg'), imgCredit:'Wikimedia Commons',
-  imgSource:'https://commons.wikimedia.org/wiki/Category:Coccinella_septempunctata', commonsQuery:'Coccinella septempunctata'
-},
-{
-  id:'stag-beetle', guideNo:18, name:'Stag Beetle', sci:'Lucanus cervus',
-  class:'Insects', category:'beetles', family:'Lucanidae', tags:['Nocturnal','Wood-dependent'],
-  details:'Europe\u2019s largest beetle, named for the male\u2019s dramatically enlarged, antler-like mandibles.',
-  traits:'Males use their oversized jaws to wrestle rivals off tree sap sites and potential mates, in contests that resemble miniature deer rutting battles.',
-  diet:'Larvae spend several years feeding inside rotting wood and tree stumps; adults feed little, mainly sipping tree sap and honeydew.',
-  range:'Woodlands across western and central Europe.',
-  role:'A keystone decomposer whose larvae help break down dead wood, recycling nutrients back into forest soil.',
-  habitat:'Deciduous Woodland', funFact:'Despite their fearsome jaws, males cannot actually bite hard — the real pinch comes from the smaller-jawed females.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Lucanus cervus'
-},
-{
-  id:'rhinoceros-beetle', guideNo:19, name:'Rhinoceros Beetle', sci:'Xylotrupes gideon',
-  class:'Insects', category:'beetles', family:'Scarabaeidae', tags:['Nocturnal','Powerful'],
-  details:'A heavily armored beetle whose males carry a large curved horn used to flip rival males off of fallen fruit and sap flows.',
-  traits:'Pound for pound, rhinoceros beetles are among the strongest animals on Earth, able to carry loads many times their own body weight.',
-  diet:'Larvae feed on decaying wood and plant matter in soil; adults feed on tree sap and overripe fruit.',
-  range:'Southeast Asia and northern Australia.',
-  role:'Larvae are important decomposers in tropical leaf litter and rotting wood ecosystems.',
-  habitat:'Tropical Forest', funFact:'Its horn is used almost exclusively for wrestling rivals rather than defense against predators.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Xylotrupes gideon'
-},
-{
-  id:'jewel-beetle', guideNo:20, name:'Jewel Beetle', sci:'Sternocera aequisignata',
-  class:'Insects', category:'beetles', family:'Buprestidae', tags:['Iridescent','Diurnal'],
-  details:'A beetle encased in a hard, brilliantly iridescent green-gold shell that has been used for centuries as a natural decorative material.',
-  traits:'Its coloration comes from microscopic structural layers in the exoskeleton rather than pigment, keeping its shine even decades after death.',
-  diet:'Adults feed on the foliage of legume trees; larvae bore and develop inside wood.',
-  range:'Southeast Asia, especially Thailand and neighboring countries.',
-  role:'Historically significant in textile and jewelry traditions across Southeast Asia, where its shed elytra are sewn into garments.',
-  habitat:'Tropical & Subtropical Forest', funFact:'Its wing cases have been used in embroidery in Thailand and India for hundreds of years, prized for never fading.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Sternocera aequisignata'
-},
-{
-  id:'sacred-scarab', guideNo:21, name:'Sacred Scarab', sci:'Scarabaeus sacer',
-  class:'Insects', category:'beetles', family:'Scarabaeidae', tags:['Diurnal','Decomposer'],
-  details:'A stocky black dung beetle that rolls dung into precise balls far larger than itself, revered in ancient Egyptian culture as a symbol of renewal.',
-  traits:'Navigates in a straight line while rolling its dung ball by reading polarized light patterns in the sky, and can even orient using the Milky Way on moonless nights.',
-  diet:'Feeds on and breeds inside the dung of large grazing mammals.',
-  range:'Southern Europe, North Africa and the Middle East.',
-  role:'A vital decomposer that buries and recycles animal dung, aerating soil and controlling fly populations in grazing ecosystems.',
-  habitat:'Grassland & Savanna', funFact:'Ancient Egyptians associated its dung-rolling behavior with the sun god Ra rolling the sun across the sky.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Scarabaeus sacer'
-},
-
-// ---------------------------------------------------------- DRAGONFLIES
-{
-  id:'blue-emperor-dragonfly', guideNo:22, name:'Blue Emperor Dragonfly', sci:'Anax imperator',
-  class:'Insects', category:'dragonflies', family:'Aeshnidae', tags:['Predator','Territorial'],
-  details:'One of Europe\u2019s largest dragonflies, with a powder-blue abdomen and a green thorax, patrolling ponds in fast, direct flight.',
-  traits:'An apex aerial predator relative to its size, capable of catching and eating prey — including other dragonflies — entirely on the wing.',
-  diet:'Adults hunt flying insects including midges, mosquitoes and butterflies; aquatic nymphs prey on tadpoles and small fish.',
-  range:'Widespread across Europe, Africa and parts of Asia.',
-  role:'A significant natural check on mosquito and midge populations around freshwater habitats.',
-  habitat:'Ponds & Wetlands', funFact:'Its huge compound eyes contain up to 30,000 individual lenses, giving it near 360-degree vision.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Anax imperator'
-},
-{
-  id:'blue-dasher', guideNo:23, name:'Blue Dasher', sci:'Pachydiplax longipennis',
-  class:'Insects', category:'dragonflies', family:'Libellulidae', tags:['Territorial','Perching'],
-  details:'A small, chunky dragonfly, the males powder-blue and the females and juveniles boldly striped in black and yellow.',
-  traits:'Males defend a perch with a clear view of open water, darting out to intercept both rivals and prey before returning to the same spot.',
-  diet:'Adults ambush small flying insects; nymphs are ambush predators of aquatic invertebrates and small fish fry.',
-  range:'Widespread across North America.',
-  role:'A common and easily observed indicator of healthy still-water habitats, from garden ponds to large wetlands.',
-  habitat:'Ponds & Marshes', funFact:'Its scientific name longipennis, "long-winged," refers to its unusually elongated hindwings.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Pachydiplax longipennis'
-},
-{
-  id:'banded-demoiselle', guideNo:24, name:'Banded Demoiselle', sci:'Calopteryx splendens',
-  class:'Insects', category:'dragonflies', family:'Calopterygidae', tags:['Territorial','Slow Flight'],
-  details:'A delicate damselfly with a metallic blue-green body; males carry a broad dark band across each wing.',
-  traits:'Males perform a fluttering courtship display, hovering in front of females to show off their wing bands before guiding them to a suitable egg-laying site.',
-  diet:'Adults take small flying insects; aquatic larvae feed on tiny invertebrates among submerged plants.',
-  range:'Rivers and streams across Europe and temperate Asia.',
-  role:'A sensitive indicator of clean, well-oxygenated flowing water, quick to disappear from polluted streams.',
-  habitat:'Rivers & Streams', funFact:'Unlike true dragonflies, it folds its wings together over its back at rest — the easiest way to tell a damselfly from a dragonfly.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Calopteryx splendens'
-},
-{
-  id:'common-green-darner', guideNo:25, name:'Common Green Darner', sci:'Anax junius',
-  class:'Insects', category:'dragonflies', family:'Aeshnidae', tags:['Migratory','Predator'],
-  details:'A large green-and-blue dragonfly and one of the few insect species known to undertake a true multigenerational migration.',
-  traits:'Migrates south in autumn in loose swarms alongside monarch butterflies, with a second generation returning north the following spring.',
-  diet:'A powerful aerial hunter of mosquitoes, midges and other flying insects, caught and eaten in flight.',
-  range:'Throughout North America, with resident and migratory populations.',
-  role:'A major natural control on mosquito populations and one of the best-studied insect migrations after the monarch butterfly.',
-  habitat:'Ponds & Wetlands', funFact:'Radio-tag tracking has shown individual green darners can cover over 100 km in a single day of migration.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Anax junius'
-},
-
-// ---------------------------------------------------------- WASPS
-{
-  id:'european-paper-wasp', guideNo:26, name:'European Paper Wasp', sci:'Polistes dominula',
-  class:'Insects', category:'wasps', family:'Vespidae', tags:['Social','Predator'],
-  details:'A slender, brightly banded wasp that builds small open-comb paper nests, chewing wood fiber mixed with saliva into a papery pulp.',
-  traits:'Colonies are founded by one or several cooperating queens, with dominance settled through ritualized aggression rather than immediate fighting.',
-  diet:'Adults feed on nectar but hunt caterpillars and other soft-bodied insects to feed their larvae, chewing prey into a paste.',
-  range:'Native to southern Europe; now widespread in North America and elsewhere.',
-  role:'A significant natural predator of garden and agricultural caterpillar pests, alongside a secondary role as a pollinator.',
-  habitat:'Gardens & Urban Areas', funFact:'Colony members can recognize each other\u2019s individual facial markings, one of the few insects known to do so.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Polistes dominula'
-},
-{
-  id:'tarantula-hawk', guideNo:27, name:'Tarantula Hawk', sci:'Pepsis grossa',
-  class:'Insects', category:'wasps', family:'Pompilidae', tags:['Solitary','Extreme Sting'],
-  details:'A large, iridescent blue-black wasp with fiery orange wings, hunting tarantulas far larger than itself.',
-  traits:'Delivers one of the most painful stings of any insect, ranked near the top of the Schmidt sting pain index, used purely to paralyze prey rather than for defense.',
-  diet:'Adults feed on nectar and fermented fruit; females paralyze a tarantula and lay a single egg on it as a living food store for their larva.',
-  range:'Deserts and dry habitats of the southwestern United States, Mexico and South America.',
-  role:'A specialized natural check on tarantula populations, and the state insect of New Mexico.',
-  habitat:'Desert & Scrubland', funFact:'A stung tarantula is not killed outright — it is paralyzed alive and buried, staying fresh for the wasp larva to feed on.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Pepsis grossa'
-},
-{
-  id:'ruby-tailed-wasp', guideNo:28, name:'Ruby-tailed Wasp', sci:'Chrysis ignita',
-  class:'Insects', category:'wasps', family:'Chrysididae', tags:['Solitary','Iridescent'],
-  details:'A tiny jewel-like wasp with a metallic ruby-and-emerald body, sometimes called a cuckoo wasp for its parasitic nesting habits.',
-  traits:'Can curl into a tight, armored ball when attacked by a host wasp, protecting its softer underside with a thickened exoskeleton.',
-  diet:'Adults feed on nectar; larvae develop as kleptoparasites, consuming the food stores and sometimes the larvae of solitary bee and wasp hosts.',
-  range:'Widespread across Europe and temperate Asia.',
-  role:'A natural population regulator of the solitary bees and wasps it parasitizes, part of a finely balanced host-parasite relationship.',
-  habitat:'Gardens & Woodland Edges', funFact:'Its brilliant coloring is structural, like a beetle\u2019s, produced by microscopic layers rather than pigment.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Chrysis ignita'
-},
-
-// ---------------------------------------------------------- ANTS
-{
-  id:'leafcutter-ant', guideNo:29, name:'Leafcutter Ant', sci:'Atta cephalotes',
-  class:'Insects', category:'ants', family:'Formicidae', tags:['Social','Farmer'],
-  details:'A tropical ant famous for stripping leaves and carrying fragments many times its own size back to an underground colony.',
-  traits:'Does not eat the leaves directly — it uses them to cultivate a fungus garden underground, the colony\u2019s true food source, in one of the animal kingdom\u2019s few true agricultural systems.',
-  diet:'Feeds on a specialized fungus grown on chewed leaf pulp inside the nest.',
-  range:'Tropical forests of Central and South America.',
-  role:'A major ecosystem engineer, moving more vegetation than almost any other herbivore in its range and aerating large volumes of soil.',
-  habitat:'Tropical Rainforest', funFact:'A mature colony can include several million ants and move as much soil as an earthworm population many times its size.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Atta cephalotes'
-},
-{
-  id:'weaver-ant', guideNo:30, name:'Weaver Ant', sci:'Oecophylla smaragdina',
-  class:'Insects', category:'ants', family:'Formicidae', tags:['Social','Arboreal'],
-  details:'A large, aggressive, bright green-bodied ant that builds nests entirely in trees by binding living leaves together.',
-  traits:'Worker ants form living chains, pulling leaf edges together while other workers use silk produced by their own larvae like glue to bind the nest shut.',
-  diet:'A generalist predator of other insects, also tending sap-sucking insects for sugary honeydew.',
-  range:'Tropical Asia and Australia.',
-  role:'Used for centuries as a natural pest-control agent in orchards across Southeast Asia, protecting citrus and mango trees from insect pests.',
-  habitat:'Tropical Forest & Orchards', funFact:'Colonies can span multiple trees and contain over half a million ants working as a single coordinated superorganism.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Oecophylla smaragdina'
-},
-
-// ---------------------------------------------------------- HUMMINGBIRDS
-{
-  id:'ruby-throated-hummingbird', guideNo:31, name:'Ruby-throated Hummingbird', sci:'Archilochus colubris',
-  class:'Birds', category:'hummingbirds', family:'Trochilidae', tags:['Avian','Migratory'],
-  details:'A tiny bird with an emerald back and crown; males show a brilliant iridescent red throat patch called a gorget.',
-  traits:'Hovers by beating its wings in a figure-eight pattern roughly 50 times per second, and is the only hummingbird species that regularly breeds in eastern North America.',
-  diet:'Feeds on nectar from tubular red and orange flowers, supplemented with small insects and spiders for protein.',
-  range:'Breeds in eastern North America; winters in Mexico and Central America.',
-  role:'A key pollinator of red, tubular native flowers such as trumpet creeper and cardinal flower.',
-  habitat:'Woodland Edges & Gardens', funFact:'It crosses the Gulf of Mexico in a single nonstop flight of up to 800 km during migration, doubling its body weight in fat beforehand.',
-  verified:true, img:CDN('Archilochus colubris (Male).jpg'), imgCredit:'Wikimedia Commons — JMSchneid',
-  imgSource:'https://commons.wikimedia.org/wiki/Category:Archilochus_colubris', commonsQuery:'Archilochus colubris'
-},
-{
-  id:'annas-hummingbird', guideNo:32, name:'Anna\u2019s Hummingbird', sci:'Calypte anna',
-  class:'Birds', category:'hummingbirds', family:'Trochilidae', tags:['Avian','Resident'],
-  details:'A stocky, adaptable hummingbird; males show an iridescent rose-pink crown and throat that can look nearly black without direct light.',
-  traits:'Performs one of the most extreme dives in the animal kingdom, plunging over 20 meters at speeds exceeding 50 mph during courtship, pulling close to 9 g of force at the bottom.',
-  diet:'Feeds on nectar from native and garden flowers, plus small insects, and readily uses backyard feeders.',
-  range:'Pacific coast of North America, from Baja California to British Columbia.',
-  role:'Unlike most hummingbirds, it does not migrate south for winter, instead surviving cold snaps by dropping into a low-energy torpor overnight.',
-  habitat:'Coastal Gardens & Urban Areas', funFact:'Its dive produces a brief chirp sound made not by its voice but by its tail feathers vibrating in the airflow.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Calypte anna'
-},
-{
-  id:'sword-billed-hummingbird', guideNo:33, name:'Sword-billed Hummingbird', sci:'Ensifera ensifera',
-  class:'Birds', category:'hummingbirds', family:'Trochilidae', tags:['Avian','High-altitude'],
-  details:'The only bird whose bill is longer than the rest of its body, evolved to match one specific group of extremely long, tubular flowers.',
-  traits:'Must perch nearly vertically and preen with its feet rather than its bill, since the enormous bill makes normal grooming impossible.',
-  diet:'Specializes in nectar from long-tubed Passiflora and other deep flowers that no other hummingbird can reach.',
-  range:'High-altitude cloud forests of the Andes, from Venezuela to Bolivia.',
-  role:'The exclusive pollinator of several long-tubed Andean flower species, an extreme example of coevolution between bird and plant.',
-  habitat:'Andean Cloud Forest', funFact:'Its bill and tongue together can be longer than its entire body, tail included.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Ensifera ensifera'
-},
-{
-  id:'rufous-hummingbird', guideNo:34, name:'Rufous Hummingbird', sci:'Selasphorus rufus',
-  class:'Birds', category:'hummingbirds', family:'Trochilidae', tags:['Avian','Migratory'],
-  details:'A small, fiery orange hummingbird with an outsized reputation for aggression, often chasing off birds many times its size.',
-  traits:'Undertakes one of the longest migrations relative to body size of any bird, traveling roughly 6,400 km one-way along a looping figure-eight route.',
-  diet:'Feeds on nectar from a wide range of wildflowers along its migratory route, timing its journey to match successive blooms.',
-  range:'Breeds as far north as Alaska; winters in Mexico.',
-  role:'An important high-latitude pollinator for wildflowers in the Pacific Northwest and western mountains.',
-  habitat:'Mountain Forests & Meadows', funFact:'Pound for pound, its migration is one of the longest of any bird species on the planet.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Selasphorus rufus'
-},
-
-// ---------------------------------------------------------- SONGBIRDS
-{
-  id:'american-robin', guideNo:35, name:'American Robin', sci:'Turdus migratorius',
-  class:'Birds', category:'songbirds', family:'Turdidae', tags:['Avian','Widespread'],
-  details:'A large, familiar thrush with a warm orange breast and dark gray back, one of the most widely recognized birds in North America.',
-  traits:'Hunts earthworms visually rather than by sound, cocking its head to look and listen before a quick, precise strike at the soil.',
-  diet:'Feeds on earthworms and insects in spring and summer, switching heavily to fruit and berries in fall and winter.',
-  range:'Breeds across most of North America; northern populations migrate south in winter.',
-  role:'Widely regarded as an early sign of spring across much of its range, though many populations actually remain through winter.',
-  habitat:'Lawns, Gardens & Woodland', funFact:'Its bright blue eggs gave rise to the widely used color name "robin\u2019s egg blue."',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Turdus migratorius'
-},
-{
-  id:'northern-cardinal', guideNo:36, name:'Northern Cardinal', sci:'Cardinalis cardinalis',
-  class:'Birds', category:'songbirds', family:'Cardinalidae', tags:['Avian','Non-migratory'],
-  details:'A vivid red songbird with a prominent crest, the male among the most eye-catching birds in eastern North American backyards.',
-  traits:'Unusually for North American songbirds, females sing nearly as often and as elaborately as males, frequently duetting with their mate from the nest.',
-  diet:'Feeds on seeds, grain and fruit, with insects making up a larger share of the diet during the breeding season.',
-  range:'Eastern and central United States into Mexico, expanding its range northward in recent decades.',
-  role:'A year-round resident and a common backyard feeder bird, contributing to seed dispersal for many native plants.',
-  habitat:'Woodland Edges & Gardens', funFact:'It is the state bird of seven U.S. states, more than any other species.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Cardinalis cardinalis'
-},
-{
-  id:'european-robin', guideNo:37, name:'European Robin', sci:'Erithacus rubecula',
-  class:'Birds', category:'songbirds', family:'Muscicapidae', tags:['Avian','Territorial'],
-  details:'A small, round bird with an orange face and breast, one of the most culturally beloved birds across the United Kingdom and much of Europe.',
-  traits:'Fiercely territorial year-round, both sexes defend individual territories with song and will attack anything showing red, including rival robins\u2019 reflections.',
-  diet:'Feeds on insects, worms, seeds and berries, and famously follows gardeners to snatch invertebrates turned up by digging.',
-  range:'Across Europe, extending into North Africa and western Asia.',
-  role:'A familiar garden companion whose habit of following large digging animals for disturbed insects likely originated from following wild boar.',
-  habitat:'Gardens & Woodland', funFact:'Its association with Christmas cards dates back to Victorian postmen, who wore red-breasted uniforms and were nicknamed "robins."',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Erithacus rubecula'
-},
-{
-  id:'blue-jay', guideNo:38, name:'Blue Jay', sci:'Cyanocitta cristata',
-  class:'Birds', category:'songbirds', family:'Corvidae', tags:['Avian','Intelligent'],
-  details:'A large, crested songbird in vivid blue, white and black, and one of the most vocal and intelligent birds in eastern North American forests.',
-  traits:'Can mimic the calls of hawks, possibly to warn other jays of danger or to clear a feeder of competing birds.',
-  diet:'An omnivore feeding on nuts, seeds, insects, and occasionally the eggs and nestlings of other birds.',
-  range:'Eastern and central North America.',
-  role:'A major disperser of acorns and other tree seeds, burying far more than it retrieves and helping regenerate oak forests.',
-  habitat:'Forests & Urban Parks', funFact:'A single jay can cache several thousand acorns in a single autumn, remembering the location of many months later.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Cyanocitta cristata'
-},
-{
-  id:'house-sparrow', guideNo:39, name:'House Sparrow', sci:'Passer domesticus',
-  class:'Birds', category:'songbirds', family:'Passeridae', tags:['Avian','Urban'],
-  details:'A stocky, adaptable brown-and-gray sparrow that has followed human settlements around the globe for thousands of years.',
-  traits:'Bathes in dust as well as water, working loose dirt into its feathers to help control parasites and absorb excess oil.',
-  diet:'A highly opportunistic omnivore, feeding on grain, seeds, scraps and insects, especially when raising chicks.',
-  range:'Native to Eurasia and North Africa; introduced almost worldwide, including the Americas and Australia.',
-  role:'One of the most successful urban-adapted bird species on the planet, though its numbers have declined sharply in parts of its native range.',
-  habitat:'Urban & Suburban Areas', funFact:'It was deliberately introduced to North America in the 1850s and had spread coast to coast within about 50 years.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Passer domesticus'
-},
-
-// ---------------------------------------------------------- RAPTORS
-{
-  id:'bald-eagle', guideNo:40, name:'Bald Eagle', sci:'Haliaeetus leucocephalus',
-  class:'Birds', category:'raptors', family:'Accipitridae', tags:['Avian','Apex Predator'],
-  details:'A massive fish-eating eagle with a white head and tail contrasting against a dark brown body, the national bird and symbol of the United States.',
-  traits:'Builds the largest tree nests of any North American bird, with some used and enlarged over decades reaching several tons in weight.',
-  diet:'Primarily fish, caught by snatching them from the water surface with its talons, supplemented with waterfowl and carrion.',
-  range:'Throughout North America, near rivers, lakes and coastlines.',
-  role:'A conservation success story, recovering from near-extinction in the lower 48 states after the pesticide DDT was banned in 1972.',
-  habitat:'Coastlines, Rivers & Lakes', funFact:'Its famous piercing scream in films is almost always dubbed over with a red-tailed hawk call — the bald eagle\u2019s real voice is a series of weak, chirping whistles.',
-  verified:true, img:CDN('Haliaeetus leucocephalus2.jpg'), imgCredit:'Wikimedia Commons',
-  imgSource:'https://commons.wikimedia.org/wiki/Category:Haliaeetus_leucocephalus', commonsQuery:'Haliaeetus leucocephalus'
-},
-{
-  id:'peregrine-falcon', guideNo:41, name:'Peregrine Falcon', sci:'Falco peregrinus',
-  class:'Birds', category:'raptors', family:'Falconidae', tags:['Avian','Fastest Animal'],
-  details:'A powerful, streamlined falcon and the fastest animal on Earth, reaching extraordinary speeds during its hunting stoop.',
-  traits:'Dives on prey from great height in a stoop that has been recorded at over 380 km/h, striking with a closed talon rather than a grab.',
-  diet:'Feeds almost exclusively on medium-sized birds caught in mid-air, from pigeons to waterfowl.',
-  range:'Nearly worldwide, absent only from the most extreme polar regions and some remote islands.',
-  role:'Another major conservation success following the DDT ban, and now a common urban nester on skyscrapers and bridges, hunting pigeons over cities.',
-  habitat:'Cliffs, Coastlines & Cities', funFact:'Special bony structures in its nostrils slow incoming airflow, letting it breathe normally even during its record-speed dives.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Falco peregrinus'
-},
-{
-  id:'red-tailed-hawk', guideNo:42, name:'Red-tailed Hawk', sci:'Buteo jamaicensis',
-  class:'Birds', category:'raptors', family:'Accipitridae', tags:['Avian','Soaring'],
-  details:'A large, broad-winged hawk and the most common and widespread hawk in North America, often seen soaring in wide circles or perched on roadside poles.',
-  traits:'Its piercing raspy scream is so iconic that Hollywood sound editors dub it over nearly every eagle shown on screen, regardless of species.',
-  diet:'A generalist predator of small mammals, especially rodents, along with birds and reptiles.',
-  range:'Throughout North America, from Alaska to Panama.',
-  role:'An effective natural rodent-control predator across farmland, grassland and suburban habitats alike.',
-  habitat:'Open Country & Roadsides', funFact:'Individual color variation is so extreme that some populations range from nearly white to almost solid dark brown.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Buteo jamaicensis'
-},
-{
-  id:'golden-eagle', guideNo:43, name:'Golden Eagle', sci:'Aquila chrysaetos',
-  class:'Birds', category:'raptors', family:'Accipitridae', tags:['Avian','Apex Predator'],
-  details:'One of the largest and most powerful raptors in the Northern Hemisphere, dark brown with golden-tinged feathers across the nape and crown.',
-  traits:'Hunts using a mix of high soaring flight and low, terrain-hugging pursuit, capable of taking prey as large as young deer in a cooperative pair attack.',
-  diet:'Primarily hares, rabbits and ground squirrels, occasionally larger mammals and birds.',
-  range:'Mountainous and open terrain across the Northern Hemisphere, including North America, Europe and Asia.',
-  role:'An apex predator and long-standing cultural symbol across many societies, from Rome to Mongolia to Indigenous North America.',
-  habitat:'Mountains & Open Highlands', funFact:'A diving golden eagle has been clocked at speeds exceeding 240 km/h.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Aquila chrysaetos'
-},
-
-// ---------------------------------------------------------- OWLS
-{
-  id:'barn-owl', guideNo:44, name:'Barn Owl', sci:'Tyto alba',
-  class:'Birds', category:'owls', family:'Tytonidae', tags:['Avian','Nocturnal'],
-  details:'A pale, heart-faced owl found on every continent except Antarctica, with one of the most distinctive silhouettes in the bird world.',
-  traits:'Its facial disc functions as a satellite dish for sound, and asymmetrically placed ears let it pinpoint prey location in complete darkness by hearing alone.',
-  diet:'Feeds almost entirely on small rodents, swallowed whole and later regurgitated as compact pellets of fur and bone.',
-  range:'Nearly worldwide except polar regions and some deserts.',
-  role:'A single barn owl family can eat over a thousand rodents in a breeding season, making it a valuable natural pest-control species for farms.',
-  habitat:'Farmland & Grassland', funFact:'Its wing feathers have a comb-like leading edge that breaks up turbulence, making its flight almost completely silent.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Tyto alba'
-},
-{
-  id:'great-horned-owl', guideNo:45, name:'Great Horned Owl', sci:'Bubo virginianus',
-  class:'Birds', category:'owls', family:'Strigidae', tags:['Avian','Powerful'],
-  details:'A large, powerful owl with prominent ear tufts and piercing yellow eyes, one of the most widespread and adaptable owls in the Americas.',
-  traits:'Has one of the strongest grip strengths of any raptor relative to size, capable of severing the spine of prey with its talons instantly.',
-  diet:'An opportunistic predator taking prey from mice to skunks, and even other raptors, including smaller owls.',
-  range:'Throughout the Americas, from the Arctic tundra edge to South America.',
-  role:'A top nocturnal predator that helps regulate populations of rodents, rabbits and other mid-sized mammals across many habitats.',
-  habitat:'Forests, Deserts & Urban Parks', funFact:'It is one of the few predators that regularly hunts skunks, seemingly unbothered by their spray thanks to a limited sense of smell.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Bubo virginianus'
-},
-{
-  id:'snowy-owl', guideNo:46, name:'Snowy Owl', sci:'Bubo scandiacus',
-  class:'Birds', category:'owls', family:'Strigidae', tags:['Avian','Arctic'],
-  details:'A large white owl of the Arctic tundra, one of the few owls active during full daylight through the polar summer.',
-  traits:'Populations track boom-and-bust cycles of Arctic lemmings, with birds sometimes irrupting far south in years when prey collapses.',
-  diet:'Feeds heavily on lemmings and other small rodents, switching to birds and hares when rodent numbers crash.',
-  range:'Circumpolar Arctic tundra, wintering irregularly farther south across Canada, the northern U.S. and northern Eurasia.',
-  role:'A key indicator species for Arctic ecosystem health, closely tied to the boom-and-bust dynamics of tundra rodent populations.',
-  habitat:'Arctic Tundra', funFact:'Unlike most owls, it hunts extensively by day during the near-endless daylight of the Arctic summer.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Bubo scandiacus'
-},
-
-// ---------------------------------------------------------- WATERFOWL
-{
-  id:'mallard', guideNo:47, name:'Mallard', sci:'Anas platyrhynchos',
-  class:'Birds', category:'waterfowl', family:'Anatidae', tags:['Avian','Widespread'],
-  details:'The most familiar and widespread duck in the Northern Hemisphere, males showing a glossy green head and the wild ancestor of nearly all domestic duck breeds.',
-  traits:'Almost all domestic duck breeds worldwide, from Pekin to Khaki Campbell, descend from this single wild species through thousands of years of selective breeding.',
-  diet:'An omnivorous dabbler, tipping tail-up to feed on aquatic plants, seeds, and small invertebrates near the water surface.',
-  range:'Nearly the entire Northern Hemisphere, introduced elsewhere including Australia and New Zealand.',
-  role:'A generalist wetland species and a major contributor to global aquatic plant seed dispersal.',
-  habitat:'Ponds, Lakes & Wetlands', funFact:'Its wild-type quack is the source of the classic "duck call" sound used across nearly all domesticated breeds too.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Anas platyrhynchos'
-},
-{
-  id:'mute-swan', guideNo:48, name:'Mute Swan', sci:'Cygnus olor',
-  class:'Birds', category:'waterfowl', family:'Anatidae', tags:['Avian','Territorial'],
-  details:'A large, all-white swan with an orange bill and a distinctive black knob at its base, gliding with its neck held in a graceful S-curve.',
-  traits:'Despite its name, it is not silent — it hisses, grunts and snorts, and produces a distinctive throbbing wing-beat sound audible from far away in flight.',
-  diet:'Feeds mainly on submerged aquatic vegetation, using its long neck to reach plants other waterfowl cannot access.',
-  range:'Native to Europe and temperate Asia; introduced and now established in North America, Australia and southern Africa.',
-  role:'Extremely territorial during breeding season, and in parts of its introduced range considered invasive for its effect on native wetland vegetation.',
-  habitat:'Lakes, Rivers & Wetlands', funFact:'In England, swans on open water have historically been associated with the Crown, a legal tradition dating back centuries.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Cygnus olor'
-},
-{
-  id:'canada-goose', guideNo:49, name:'Canada Goose', sci:'Branta canadensis',
-  class:'Birds', category:'waterfowl', family:'Anatidae', tags:['Avian','Migratory'],
-  details:'A large brown-bodied goose with a distinctive black head and neck marked by a white chin strap, among the most recognizable waterfowl in North America.',
-  traits:'Flies in a characteristic V-formation on migration, with each bird gaining lift from the wingtip vortex of the bird ahead, rotating the lead position to share the effort.',
-  diet:'Grazes on grasses, grains and aquatic plants, and has adapted well to mown lawns, parks and golf courses.',
-  range:'Native to North America; introduced and now well established in parts of Europe.',
-  role:'Many populations have shifted from long-distance migrants to year-round urban residents, thriving in human-altered landscapes.',
-  habitat:'Lakes, Parks & Grassland', funFact:'Migrating flocks can fly at altitudes of over 8,000 meters, among the highest confirmed altitudes for any bird.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Branta canadensis'
-},
-{
-  id:'american-flamingo', guideNo:50, name:'American Flamingo', sci:'Phoenicopterus ruber',
-  class:'Birds', category:'waterfowl', family:'Phoenicopteridae', tags:['Avian','Colonial'],
-  details:'A tall wading bird with vivid pink-orange plumage, long legs and a distinctively downturned bill adapted for filter feeding.',
-  traits:'Its pink coloration comes entirely from pigments in the algae and crustaceans it eats — birds raised on a diet lacking these compounds turn pale gray or white.',
-  diet:'Filter-feeds on algae, brine shrimp and small invertebrates, holding its bill upside-down in shallow water to strain food from mud and water.',
-  range:'Caribbean coasts, the Yucatán Peninsula, Galápagos Islands and northern South America.',
-  role:'Breeds in enormous colonies of thousands of birds, a strategy that helps overwhelm predators through sheer numbers.',
-  habitat:'Coastal Lagoons & Salt Flats', funFact:'Flamingos can sleep standing on one leg, a posture that may help conserve body heat lost through the legs.',
-  verified:false, img:null, imgCredit:null, imgSource:null, commonsQuery:'Phoenicopterus ruber'
-},
+const BADGE_PALETTE = [
+  {bg:'#E7DFF3', ink:'#6B4FA0'}, {bg:'#F5DEDC', ink:'#A24B3E'},
+  {bg:'#DCEAF3', ink:'#3E6E93'}, {bg:'#E1EFDD', ink:'#4A7A3E'},
+  {bg:'#F3E7C4', ink:'#8A6B1E'},
 ];
+const PH_GRADIENTS = {
+  bees:['#D8A93F','#B07C1F'], butterflies:['#C2603A','#8F3F23'], moths:['#6E5A8B','#4A3A63'],
+  beetles:['#6E8B5E','#476139'], dragonflies:['#3E8B93','#255E64'], wasps:['#BE6A2C','#8A4718'],
+  ants:['#7A5B3E','#523C29'], hummingbirds:['#C2603A','#93472A'], songbirds:['#8B6E4C','#61492F'],
+  raptors:['#5C6B4C','#3C4630'], owls:['#5B5240','#3A342A'], waterfowl:['#3E7A8B','#28535F'],
+};
 
-const DISCOVERIES = SPECIES.map(s => ({ text: s.funFact, id: s.id }));
+function chipStyle(text){ const p = CHIP_PALETTE[strHash(text)%CHIP_PALETTE.length]; return `background:${p.bg};color:${p.ink}`; }
+function badgeStyle(text){ const p = BADGE_PALETTE[strHash(text)%BADGE_PALETTE.length]; return `background:${p.bg};color:${p.ink}`; }
+function phGradient(catKey){ const g = PH_GRADIENTS[catKey]||['#8B7B5E','#61533C']; return `linear-gradient(150deg, ${g[0]}, ${g[1]})`; }
+function commonsSearchUrl(q){ return `https://commons.wikimedia.org/w/index.php?search=${encodeURIComponent(q)}&title=Special:MediaSearch&type=image`; }
 
-const QUOTES = [
-  'In every wingbeat, a story. In every creature, a connection.',
-  'The smallest wings often carry the longest journeys.',
-  'Look closely — the field guide is bigger on the inside.',
-  'Every species is a small argument for paying attention.',
-];
+/* ---------- storage ---------- */
+const Store = {
+  notesKey: 'faunalab.notes.v1',
+  compareKey: 'faunalab.compare.v1',
+  getNotes(){ try{ return JSON.parse(localStorage.getItem(this.notesKey)) || {}; }catch(e){ return {}; } },
+  saveNote(id, text){
+    const all = this.getNotes();
+    if(!all[id]) all[id] = [];
+    all[id].unshift({ text, date: new Date().toISOString() });
+    localStorage.setItem(this.notesKey, JSON.stringify(all));
+  },
+  deleteNoteAt(id, idx){
+    const all = this.getNotes();
+    if(all[id]){ all[id].splice(idx,1); if(!all[id].length) delete all[id]; }
+    localStorage.setItem(this.notesKey, JSON.stringify(all));
+  },
+  getCompare(){ try{ return JSON.parse(localStorage.getItem(this.compareKey)) || []; }catch(e){ return []; } },
+  setCompare(list){ localStorage.setItem(this.compareKey, JSON.stringify(list)); }
+};
 
-if (typeof module !== 'undefined') module.exports = { SPECIES, CATEGORIES, DISCOVERIES, QUOTES };
+/* ---------- state ---------- */
+const state = {
+  view:'collection', speciesId:null, classFilter:null, categoryFilter:null, habitatFilter:null,
+  query:'', sort:'guide', searchOpen:false,
+  rotate:0, zoomIdx:1, scopeOn:false, autoRotateTimer:null, show3D:false,
+  compare: Store.getCompare(), sidebarOpen:false, detailOpenMobile:false,
+  openGroups:{Insects:true, Birds:true},
+  quote: QUOTES[Math.floor(Math.random()*QUOTES.length)],
+  discovery: DISCOVERIES[Math.floor(Math.random()*DISCOVERIES.length)],
+};
+
+/* ---------- routing ---------- */
+function parseRoute(){
+  const h = location.hash.replace(/^#\/?/, '');
+  const parts = h.split('/').filter(Boolean);
+  if(parts[0] === 'species' && parts[1]){ state.view='detail'; state.speciesId=decodeURIComponent(parts[1]); return; }
+  if(parts[0] === 'notes'){ state.view='notes'; return; }
+  if(parts[0] === 'learn'){ state.view='learn'; return; }
+  state.view='collection';
+  state.classFilter=null; state.categoryFilter=null; state.habitatFilter=null; state.query='';
+  for(let i=1;i<parts.length;i+=2){
+    const k=parts[i], v=decodeURIComponent(parts[i+1]||'');
+    if(k==='cat') state.categoryFilter=v;
+    if(k==='class') state.classFilter=v;
+    if(k==='habitat') state.habitatFilter=v;
+    if(k==='q') state.query=v;
+  }
+}
+function go(hash){ location.hash = hash; }
+window.addEventListener('hashchange', ()=>{ parseRoute(); resetViewerState(); render(); });
+
+function resetViewerState(){ state.rotate=0; state.zoomIdx=1; state.scopeOn=false; state.show3D=false; stopAutoRotate(); }
+
+/* ---------- App (exposed for inline onclick handlers) ---------- */
+const App = {
+  toggleSidebar(force){ state.sidebarOpen = force!==undefined?force:!state.sidebarOpen; renderShellChrome(); },
+  toggleDetailMobile(force){ state.detailOpenMobile = force!==undefined?force:!state.detailOpenMobile; renderShellChrome(); },
+  navHome(){ go('#/collection'); App.toggleSidebar(false); },
+  navExplore(){ go('#/collection'); App.toggleSidebar(false); },
+  navNotes(){ go('#/notes'); App.toggleSidebar(false); },
+  navHabitat(){
+    state.view='collection'; state.categoryFilter=null; state.classFilter=null; state.habitatFilter=null; state.query='';
+    state.habitatMode=true;
+    if(location.hash !== '#/collection') location.hash = '#/collection';
+    App.toggleSidebar(false); render();
+  },
+  navLearn(){ go('#/learn'); App.toggleSidebar(false); },
+  navMore(){ toggleAppMoreMenu(); },
+
+  toggleClassGroup(cls){ state.openGroups[cls] = !state.openGroups[cls]; renderSidebar(); },
+  selectCategory(key){ go('#/collection/cat/'+key); App.toggleSidebar(false); },
+  clearFilters(){ go('#/collection'); },
+
+  openSearch(){ state.searchOpen = !state.searchOpen; renderSidebar(); if(state.searchOpen) setTimeout(()=>{ const el=$('#sidebarSearch'); if(el) el.focus(); },10); },
+  runSearch(val){
+    state.query = val;
+    if(val){ state.categoryFilter=null; state.classFilter=null; state.habitatFilter=null; }
+    state.view = 'collection';
+    const active = document.activeElement;
+    const wasFocused = active && active.id === 'sidebarSearch';
+    const caret = wasFocused ? active.selectionStart : null;
+    renderSidebar();
+    if(wasFocused){
+      const el = $('#sidebarSearch');
+      if(el){ el.focus(); if(caret!=null) el.setSelectionRange(caret, caret); }
+    }
+    renderMain();
+  },
+  cycleSort(){
+    const order = ['guide','az','category'];
+    state.sort = order[(order.indexOf(state.sort)+1)%order.length];
+    renderMain();
+  },
+
+  selectSpecies(id){ go('#/species/'+id); },
+  backToCollection(){ go('#/collection'); },
+
+  setHabitatFilter(h){ go('#/collection/habitat/'+encodeURIComponent(h)); },
+
+  rotateDelta(delta){
+    state.rotate = Math.max(-180, Math.min(180, state.rotate+delta));
+    applyViewerTransform();
+  },
+  rotateReset(){ state.rotate = 0; state.zoomIdx=1; applyViewerTransform(); },
+  rotateFromSlider(val){ state.rotate = parseInt(val,10); applyViewerTransform(); },
+  toggleCube(){
+    const sp = byId(state.speciesId);
+    if(sp && sp.model){ state.show3D = !state.show3D; renderMain(); }
+    else{ App.toggleAutoRotate(); }
+  },
+  toggleAutoRotate(){
+    if(state.autoRotateTimer){ stopAutoRotate(); }
+    else{
+      state.autoRotateTimer = setInterval(()=>{ state.rotate = (state.rotate+2); if(state.rotate>180) state.rotate-=360; applyViewerTransform(true); }, 40);
+    }
+    renderSideButtons();
+  },
+  cycleZoom(){ state.zoomIdx = (state.zoomIdx+1)%3; applyViewerTransform(); renderSideButtons(); },
+  toggleScope(){
+    state.scopeOn = !state.scopeOn; renderSideButtons();
+    const img=$('#viewerImg'); if(img) img.style.cursor = state.scopeOn?'crosshair':'grab';
+    if(!state.scopeOn) applyViewerTransform();
+  },
+  openFullscreen(){
+    const sp = byId(state.speciesId); if(!sp) return;
+    const lb = $('#lightbox');
+    const img = $('#lightboxImg');
+    if(sp.verified && sp.img){ img.style.display='block'; img.src = sp.img; $('#lightboxPh').style.display='none'; }
+    else{ img.style.display='none'; const ph=$('#lightboxPh'); ph.style.display='flex'; ph.style.background=phGradient(sp.category); ph.querySelector('.ph-initial').textContent = sp.name[0]; }
+    lb.classList.add('show');
+  },
+  closeLightbox(){ $('#lightbox').classList.remove('show'); },
+
+  openNotebook(){
+    const drawer = $('#notebookDrawer'); const overlay=$('#drawerOverlay');
+    drawer.classList.add('show'); overlay.classList.add('show');
+    renderNotebookDrawer();
+  },
+  closeNotebook(){ $('#notebookDrawer').classList.remove('show'); $('#drawerOverlay').classList.remove('show'); },
+  saveNote(){
+    const ta = $('#notebookText'); const val = ta.value.trim();
+    if(!val) return;
+    Store.saveNote(state.speciesId, val);
+    ta.value='';
+    renderNotebookDrawer();
+    const hint = $('#savedHint'); hint.textContent='Saved.'; setTimeout(()=>{ if(hint) hint.textContent=''; },1600);
+  },
+  deleteNote(idx){ Store.deleteNoteAt(state.speciesId, idx); renderNotebookDrawer(); },
+  goToNoteSpecies(id){ App.closeNotebook(); go('#/species/'+id); },
+
+  toggleCompare(id, ev){
+    if(ev) ev.stopPropagation();
+    const i = state.compare.indexOf(id);
+    if(i>-1) state.compare.splice(i,1);
+    else{ if(state.compare.length>=4){ showToast('You can compare up to 4 species at a time.'); return; } state.compare.push(id); }
+    Store.setCompare(state.compare);
+    renderMain(); renderCompareTray();
+  },
+  removeCompare(id){ state.compare = state.compare.filter(x=>x!==id); Store.setCompare(state.compare); renderCompareTray(); renderCompareModal(); renderMain(); },
+  openCompare(){ if(state.compare.length<2){ showToast('Pick at least 2 species to compare.'); return; } $('#compareModalWrap').classList.add('show'); renderCompareModal(); },
+  closeCompare(){ $('#compareModalWrap').classList.remove('show'); },
+
+  share(){
+    const sp = byId(state.speciesId); if(!sp) return;
+    const text = `${sp.name} (${sp.sci}) — ${sp.details}`;
+    if(navigator.share){ navigator.share({title:sp.name, text}).catch(()=>{}); }
+    else{
+      navigator.clipboard && navigator.clipboard.writeText(text).then(()=>showToast('Copied to clipboard.'));
+    }
+  },
+  toggleMore(){ toggleSpeciesMoreMenu(); },
+  copyDetails(){
+    const sp = byId(state.speciesId); if(!sp) return;
+    const text = `${sp.name} (${sp.sci})\nFamily: ${sp.family}\n\n${sp.details}\n\nTraits: ${sp.traits}\nDiet: ${sp.diet}\nRange: ${sp.range}\nEcological role: ${sp.role}`;
+    navigator.clipboard && navigator.clipboard.writeText(text).then(()=>{ showToast('Details copied.'); closeMoreMenu(); });
+  },
+  printPage(){ closeMoreMenu(); window.print(); },
+
+  shuffleDiscovery(){ let d; do{ d = DISCOVERIES[Math.floor(Math.random()*DISCOVERIES.length)]; }while(d===state.discovery && DISCOVERIES.length>1); state.discovery=d; renderSidebar(); },
+  jumpToDiscovery(){ if(state.discovery) go('#/species/'+state.discovery.id); },
+  shuffleQuote(){ let q; do{ q = QUOTES[Math.floor(Math.random()*QUOTES.length)]; }while(q===state.quote && QUOTES.length>1); state.quote=q; $('.quote-strip .qtext').textContent = '\u201c'+q+'\u201d'; },
+
+  showAbout(){
+    closeAnyMenu();
+    const verifiedCount = SPECIES.filter(s=>s.verified).length;
+    $('#aboutModal').innerHTML = `
+      <div class="compare-modal-head"><h2 style="font-size:18px;">About Fauna Lab</h2><button onclick="App.closeAbout()">${icon('close',20)}</button></div>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.65;">
+        A field guide to ${SPECIES.length} insects and birds, built as a fully interactive, offline-friendly web app.
+        Notes and comparisons are saved only in this browser, via <code>localStorage</code> — nothing is sent anywhere.
+      </p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.65;margin-top:10px;">
+        ${verifiedCount} of ${SPECIES.length} entries carry a photo verified against Wikimedia Commons at build time
+        (credited on each species page). The rest use an illustrated placeholder with a one-click link to search
+        Commons for a real photo — open a species\u2019s <strong>More</strong> menu to grab one.
+      </p>
+    `;
+    $('#aboutModalWrap').classList.add('show');
+  },
+  closeAbout(){ $('#aboutModalWrap').classList.remove('show'); },
+  clearNotebookData(){
+    closeAnyMenu();
+    if(confirm('Clear all saved notebook entries? This can\u2019t be undone.')){
+      localStorage.removeItem(Store.notesKey);
+      showToast('Notebook cleared.');
+      if(state.view==='notes') renderMain();
+    }
+  },
+
+  showModelInfo(){
+    closeAnyMenu();
+    $('#modelInfoModal').innerHTML = `
+      <div class="compare-modal-head"><h2 style="font-size:18px;">${icon('cube',18)} Add a real 3D model</h2><button onclick="App.closeModelInfo()">${icon('close',20)}</button></div>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.65;">
+        Open <code>data.js</code>, find the species object you want, and add one <code>model</code> line. No other code changes needed \u2014 the viewer picks it up automatically and shows a real, orbit-able 3D model instead of the photo.
+      </p>
+      <p style="font-size:12px;font-weight:700;margin-top:14px;margin-bottom:6px;">Option A \u2014 Sketchfab (easiest, nothing to host)</p>
+      <div class="code-block">model: { type:'sketchfab', id:'2b5e1e1a4a...' },</div>
+      <p style="font-size:12px;color:var(--ink-soft);margin-top:8px;line-height:1.6;">
+        Go to sketchfab.com, search the species, filter results by <strong>Downloadable</strong> (usually means embeddable/CC-licensed), open a model, click <strong>Embed</strong>, and copy the 32-character ID from the embed URL
+        (<span style="white-space:nowrap;">sketchfab.com/models/<u>THIS PART</u>/embed</span>). Credit the artist per the license shown on the model page.
+      </p>
+      <p style="font-size:12px;font-weight:700;margin-top:14px;margin-bottom:6px;">Option B \u2014 self-hosted glTF/GLB file</p>
+      <div class="code-block">model: { type:'glb', url:'models/honeybee.glb' },</div>
+      <p style="font-size:12px;color:var(--ink-soft);margin-top:8px;line-height:1.6;">
+        Any direct URL to a <code>.glb</code>/<code>.gltf</code> file works \u2014 a relative path to a file you place next to <code>index.html</code>, or a link to one hosted elsewhere. This renders through
+        Google's <code>&lt;model-viewer&gt;</code>, already loaded in <code>index.html</code>, with full drag-to-orbit and auto-rotate built in.
+      </p>
+      <p style="font-size:12px;color:var(--ink-soft);margin-top:12px;line-height:1.6;">
+        <strong>Where to find real models:</strong> Sketchfab (large free/CC library), Smithsonian 3D (si.edu/3d \u2014 public-domain specimen scans), or CGTrader/TurboSquid for paid, higher-detail work. Always check the license before self-hosting a file \u2014 Sketchfab embeds inherit the creator's permitted usage automatically, which is why it's the easiest starting point.
+      </p>
+    `;
+    $('#modelInfoWrap').classList.add('show');
+  },
+  closeModelInfo(){ $('#modelInfoWrap').classList.remove('show'); },
+
+  openAR(){ openARModal(); },
+  closeAR(){ closeARModal(); },
+  arGrow(){ arSize = Math.min(320, arSize+24); const s=$('#arSticker'); if(s) s.style.width=arSize+'px'; },
+  arShrink(){ arSize = Math.max(60, arSize-24); const s=$('#arSticker'); if(s) s.style.width=arSize+'px'; },
+};
+window.App = App;
+
+/* ---------- viewer transform ---------- */
+function applyViewerTransform(auto){
+  const img = $('#viewerImg');
+  const zoomVals = [0.86, 1, 1.18];
+  if(img){ img.style.transformOrigin = '50% 50%'; img.style.transform = `rotateY(${state.rotate}deg) scale(${zoomVals[state.zoomIdx]})`; }
+  const pill = $('#degPill'); if(pill) pill.textContent = Math.round(state.rotate)+'\u00b0';
+  const slider = $('#rotateSlider'); if(slider) slider.value = state.rotate;
+}
+function stopAutoRotate(){ if(state.autoRotateTimer){ clearInterval(state.autoRotateTimer); state.autoRotateTimer=null; } }
+
+/* ---------- drag-to-rotate ---------- */
+function attachDragRotate(){
+  const img = $('#viewerImg'); if(!img) return;
+  let dragging=false, startX=0, startRotate=0;
+  img.addEventListener('pointerdown', e=>{
+    dragging=true; startX=e.clientX; startRotate=state.rotate; img.setPointerCapture(e.pointerId);
+    stopAutoRotate(); renderSideButtons();
+  });
+  img.addEventListener('pointermove', e=>{
+    if(!dragging) return;
+    const delta = (e.clientX-startX) * 0.6;
+    state.rotate = Math.max(-180, Math.min(180, startRotate+delta));
+    applyViewerTransform();
+  });
+  const end = ()=>{ dragging=false; };
+  img.addEventListener('pointerup', end);
+  img.addEventListener('pointerleave', end);
+}
+
+/* ---------- scope magnifier ---------- */
+function attachScopeMagnifier(){
+  const stage = $('.viewer-stage'); const img = $('#viewerImg'); if(!stage || !img) return;
+  stage.addEventListener('pointermove', e=>{
+    if(!state.scopeOn) return;
+    const r = stage.getBoundingClientRect();
+    const px = ((e.clientX-r.left)/r.width*100).toFixed(1);
+    const py = ((e.clientY-r.top)/r.height*100).toFixed(1);
+    img.style.transformOrigin = `${px}% ${py}%`;
+    img.style.transform = `rotateY(${state.rotate}deg) scale(2.1)`;
+  });
+  stage.addEventListener('pointerleave', ()=>{ if(state.scopeOn) applyViewerTransform(); });
+}
+
+/* ---------- dropdown menu helper ---------- */
+function buildDropdown(anchorEl, itemsHtml){
+  closeAnyMenu();
+  const m = document.createElement('div');
+  m.className = 'dropdown-menu';
+  m.id='activeMenu';
+  m.style.cssText = 'position:absolute;z-index:30;background:var(--panel-solid);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-md);padding:6px;min-width:220px;';
+  const rect = anchorEl.getBoundingClientRect();
+  m.style.top = (rect.bottom+6+window.scrollY)+'px';
+  m.style.right = Math.max(10, window.innerWidth-rect.right)+'px';
+  m.innerHTML = itemsHtml;
+  Array.from(m.querySelectorAll('button,a')).forEach(b=>{
+    b.style.cssText += 'display:flex;gap:8px;align-items:center;width:100%;padding:9px 10px;border-radius:8px;font-size:12.5px;font-weight:600;text-align:left;';
+    b.addEventListener('mouseenter',()=>b.style.background='var(--bg-soft)');
+    b.addEventListener('mouseleave',()=>b.style.background='transparent');
+  });
+  document.body.appendChild(m);
+  setTimeout(()=>document.addEventListener('click', closeMenuOnOutsideClick),0);
+}
+function closeMenuOnOutsideClick(e){
+  const m = $('#activeMenu'); if(!m) return;
+  if(!m.contains(e.target) && e.target.id!=='moreBtn' && e.target.id!=='sidebarMoreBtn' && !(e.target.closest && e.target.closest('#sidebarMoreBtn'))){ closeAnyMenu(); }
+}
+function closeAnyMenu(){ const m=$('#activeMenu'); if(m) m.remove(); document.removeEventListener('click', closeMenuOnOutsideClick); }
+function closeMoreMenu(){ closeAnyMenu(); }
+
+function toggleSpeciesMoreMenu(){
+  const existing = $('#activeMenu'); if(existing){ closeAnyMenu(); return; }
+  const sp = byId(state.speciesId);
+  const btn = $('#moreBtn'); if(!btn) return;
+  let extra = '';
+  if(sp && !sp.verified){
+    extra = `<a href="${commonsSearchUrl(sp.commonsQuery)}" target="_blank" rel="noopener" style="color:var(--sage-ink);">${icon('link',16)} Find a real photo on Commons</a>`;
+  }
+  buildDropdown(btn, `
+    <button onclick="App.copyDetails()">${icon('notebook',16)} Copy field guide entry</button>
+    <button onclick="App.printPage()">${icon('download',16)} Print / save as PDF</button>
+    <button onclick="App.showModelInfo()">${icon('cube',16)} Add a real 3D model</button>
+    ${extra}
+  `);
+}
+function toggleAppMoreMenu(){
+  const existing = $('#activeMenu'); if(existing){ closeAnyMenu(); return; }
+  const btn = $('#sidebarMoreBtn'); if(!btn) return;
+  buildDropdown(btn, `
+    <button onclick="App.showAbout()">${icon('info',16)} About this guide</button>
+    <button onclick="App.showModelInfo()">${icon('cube',16)} Add a real 3D model</button>
+    <button onclick="App.clearNotebookData()">${icon('close',16)} Clear my saved notes</button>
+  `);
+}
+
+/* ---------- toast ---------- */
+function showToast(msg){
+  const wrap = $('#toastWrap');
+  const t = document.createElement('div');
+  t.className='toast';
+  t.innerHTML = `${icon('check',15)} <span>${msg}</span>`;
+  wrap.appendChild(t);
+  setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .25s'; setTimeout(()=>t.remove(),260); }, 2400);
+}
+
+/* ---------- AR ---------- */
+let arStream = null, arSize = 150;
+function openARModal(){
+  const sp = byId(state.speciesId);
+  const modal = $('#arModal'); modal.classList.add('show');
+  $('#arError').style.display='none';
+  const video = $('#arVideo');
+  navigator.mediaDevices && navigator.mediaDevices.getUserMedia ?
+    navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } }).then(stream=>{
+      arStream = stream; video.srcObject = stream; video.style.display='block';
+      setupSticker(sp);
+    }).catch(()=>{ showAROnlyPreview(sp); })
+    : showAROnlyPreview(sp);
+}
+function showAROnlyPreview(sp){
+  $('#arVideo').style.display='none';
+  $('#arError').style.display='flex';
+  $('#arError').innerHTML = `<div>${icon('camera',30)}<p style="margin-top:10px;">Camera access isn\u2019t available in this browser/context.<br>Here\u2019s the field guide sticker on its own \u2014 drag it around.</p></div>`;
+  setupSticker(sp);
+}
+function setupSticker(sp){
+  const s = $('#arSticker');
+  s.innerHTML = (sp.verified && sp.img) ? `<img src="${sp.img}" style="width:100%;display:block;filter:drop-shadow(0 8px 16px rgba(0,0,0,.45))" onerror="this.parentElement.style.background='${phGradient(sp.category).replace(/'/g,"\\'")}'; this.remove();">`
+    : `<div style="width:${arSize}px;height:${arSize}px;border-radius:20px;background:${phGradient(sp.category)};display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--font-display);font-size:32px;">${sp.name[0]}</div>`;
+  s.style.width = arSize+'px';
+  s.style.left = '50%'; s.style.top='45%'; s.style.transform='translate(-50%,-50%)';
+  let dragging=false, offX=0, offY=0;
+  s.onpointerdown = (e)=>{ dragging=true; s.setPointerCapture(e.pointerId); const r=s.getBoundingClientRect(); offX=e.clientX-r.left; offY=e.clientY-r.top; s.style.transform='none'; };
+  s.onpointermove = (e)=>{ if(!dragging) return; s.style.left = (e.clientX-offX)+'px'; s.style.top=(e.clientY-offY)+'px'; };
+  s.onpointerup = ()=>{ dragging=false; };
+}
+function closeARModal(){
+  $('#arModal').classList.remove('show');
+  if(arStream){ arStream.getTracks().forEach(t=>t.stop()); arStream=null; }
+}
+
+/* ============================================================
+   RENDER: SIDEBAR
+   ============================================================ */
+function renderSidebar(){
+  const totalCount = SPECIES.length;
+  const groups = ['Insects','Birds'];
+  const groupsHtml = groups.map(cls=>{
+    const cats = CATEGORIES.filter(c=>c.class===cls);
+    const open = state.openGroups[cls];
+    return `
+    <div class="class-group ${open?'open':''}">
+      <div class="class-group-head" onclick="App.toggleClassGroup('${cls}')">
+        <span>${cls}</span>
+        <span class="chev">${icon('chevron',14)}</span>
+      </div>
+      <div class="class-group-body">
+        ${cats.map(c=>{
+          const count = SPECIES.filter(s=>s.category===c.key).length;
+          const active = state.categoryFilter===c.key;
+          return `<div class="cat-row ${active?'active':''}" onclick="App.selectCategory('${c.key}')">
+            <span class="cat-icon">${icon(c.icon,17)}</span>
+            <span>
+              <div class="cat-name">${c.label}</div>
+              <div class="cat-count">${count} species</div>
+            </span>
+            <span class="chev">${icon('chevron',13)}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  $('#sidebar').innerHTML = `
+    <div class="brand">
+      ${icon('leaf',26,'')}
+      <div class="brand-text">
+        <h1>Fauna <em>Lab</em></h1>
+        <p>Explore &middot; Learn &middot; Protect</p>
+      </div>
+    </div>
+    <nav class="nav-list">
+      <div class="nav-item ${state.view==='collection'&&!state.categoryFilter?'active':''}" onclick="App.navHome()">${icon('home',18)}<span>Home</span></div>
+      <div class="nav-item ${state.view==='collection'&&state.categoryFilter?'active':''}" onclick="App.navExplore()">${icon('explore',18)}<span>Explore</span></div>
+      <div class="nav-item ${state.view==='notes'?'active':''}" onclick="App.navNotes()">${icon('notes',18)}<span>Notes</span></div>
+      <div class="nav-item" onclick="App.navHabitat()">${icon('habitat',18)}<span>Habitat</span></div>
+      <div class="nav-item ${state.view==='learn'?'active':''}" onclick="App.navLearn()">${icon('learn',18)}<span>Learn</span></div>
+      <div class="nav-item" onclick="App.navMore()" id="sidebarMoreBtn">${icon('more',18)}<span>More</span></div>
+    </nav>
+    <div class="panel-card">
+      <div class="species-panel-head">
+        <h2>Species <span class="count">${totalCount}</span></h2>
+        <div class="panel-tools">
+          <button class="tool-btn ${state.searchOpen?'active':''}" onclick="App.openSearch()" title="Search">${icon('search',15)}</button>
+          <button class="tool-btn" onclick="App.cycleSort()" title="Sort: ${state.sort}">${icon('sort',15)}</button>
+        </div>
+      </div>
+      ${state.searchOpen ? `<div class="search-row"><input id="sidebarSearch" type="text" placeholder="Search species\u2026" value="${escapeAttr(state.query)}" oninput="App.runSearch(this.value)"></div>` : ''}
+      ${groupsHtml}
+    </div>
+    <div class="panel-card discovery-mini">
+      <div class="emoji" style="cursor:pointer" onclick="App.jumpToDiscovery()">\ud83c\udf3f</div>
+      <div style="cursor:pointer" onclick="App.jumpToDiscovery()">
+        <h3>Today\u2019s Discovery</h3>
+        <p>${state.discovery ? state.discovery.text : ''}</p>
+      </div>
+      <button class="shuffle-btn" onclick="App.shuffleDiscovery()" title="Shuffle">${icon('shuffle',15)}</button>
+    </div>
+  `;
+}
+
+function escapeAttr(s){ return (s||'').replace(/"/g,'&quot;'); }
+function escapeHtml(s){ return (s||'').replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+/* ============================================================
+   RENDER: MAIN ROUTER
+   ============================================================ */
+function renderMain(){
+  const main = $('#main');
+  if(state.view==='detail'){ main.innerHTML = detailTemplate(state.speciesId); afterDetailRender(); return; }
+  if(state.view==='notes'){ main.innerHTML = notesTemplate(); return; }
+  if(state.view==='learn'){ main.innerHTML = learnTemplate(); return; }
+  main.innerHTML = collectionTemplate();
+}
+
+/* ---------------- COLLECTION VIEW ---------------- */
+function collectionTemplate(){
+  let list = SPECIES.slice();
+  let title = 'All Species', sub = `${SPECIES.length} insects & birds in the field guide`;
+
+  if(state.categoryFilter){
+    const c = catInfo(state.categoryFilter);
+    list = list.filter(s=>s.category===state.categoryFilter);
+    title = c ? c.label : title; sub = `${list.length} species in this group`;
+  }
+  if(state.classFilter){ list = list.filter(s=>s.class===state.classFilter); title = state.classFilter; }
+  if(state.habitatFilter){ list = list.filter(s=>s.habitat===state.habitatFilter); title = state.habitatFilter; sub=`${list.length} species sharing this habitat`; }
+  if(state.query){
+    const q = state.query.toLowerCase();
+    list = list.filter(s=> s.name.toLowerCase().includes(q) || s.sci.toLowerCase().includes(q) || s.family.toLowerCase().includes(q) || s.tags.join(' ').toLowerCase().includes(q));
+    title = `Results for \u201c${state.query}\u201d`; sub = `${list.length} match${list.length===1?'':'es'}`;
+  }
+  if(state.sort==='az') list.sort((a,b)=>a.name.localeCompare(b.name));
+  else if(state.sort==='category') list.sort((a,b)=> a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+  else list.sort((a,b)=>a.guideNo-b.guideNo);
+
+  const habitats = Array.from(new Set(SPECIES.map(s=>s.habitat)));
+
+  return `
+    <div class="collection-view">
+      <div class="collection-head">
+        <div>
+          <h1>${title}</h1>
+          <p>${sub}</p>
+        </div>
+        <div class="collection-controls">
+          <select class="select-input" onchange="location.hash = this.value ? '#/collection/class/'+this.value : '#/collection'">
+            <option value="">All classes</option>
+            <option value="Insects" ${state.classFilter==='Insects'?'selected':''}>Insects</option>
+            <option value="Birds" ${state.classFilter==='Birds'?'selected':''}>Birds</option>
+          </select>
+          <select class="select-input" onchange="App.cycleSortTo && null">
+            <option>Sorted by: ${state.sort==='guide'?'Guide No.':state.sort==='az'?'A\u2013Z':'Category'}</option>
+          </select>
+          ${ (state.categoryFilter||state.classFilter||state.habitatFilter||state.query) ? `<button class="select-input" onclick="App.clearFilters()">Clear filters</button>` : '' }
+        </div>
+      </div>
+      ${ state.habitatMode ? `<div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:18px;">
+          ${habitats.map(h=>`<button class="select-input" style="border-radius:20px;font-size:12px;${state.habitatFilter===h?'background:var(--sage-bg);border-color:#cfe0bd;':''}" onclick="App.setHabitatFilter('${escapeAttr(h)}')">${h}</button>`).join('')}
+        </div>` : '' }
+      ${ list.length ? `<div class="grid">${list.map(gCard).join('')}</div>` : emptyState() }
+    </div>
+  `;
+}
+
+function emptyState(){
+  return `<div class="empty-state">
+    ${icon('search',30)}
+    <h3 style="margin-top:10px;">No matches here</h3>
+    <p>Try a different search term or clear your filters.</p>
+  </div>`;
+}
+
+function gCard(s){
+  const inCompare = state.compare.includes(s.id);
+  const imgBlock = s.verified && s.img
+    ? `<img src="${s.img}" alt="${s.name}" loading="lazy" onerror="this.parentElement.innerHTML=phInner('${s.category}','${escapeAttr(s.name[0])}')">`
+    : phInner(s.category, s.name[0]);
+  return `
+  <div class="g-card" onclick="App.selectSpecies('${s.id}')">
+    <div class="g-card-img">${imgBlock}</div>
+    <div class="g-card-body">
+      <h3>${s.name}</h3>
+      <div class="sci">${s.sci}</div>
+      <div class="g-card-foot">
+        <span class="g-card-cat">${catInfo(s.category).label}</span>
+        <button class="compare-add-btn ${inCompare?'on':''}" title="Add to compare" onclick="App.toggleCompare('${s.id}', event)">${icon(inCompare?'check':'plus',13)}</button>
+      </div>
+    </div>
+  </div>`;
+}
+function phInner(catKey, initial){
+  return `<div class="g-card-ph" style="background:${phGradient(catKey)}">${initial}</div>`;
+}
+window.phInner = phInner; // used in inline onerror string above
+
+/* ---------------- LEARN VIEW ---------------- */
+function learnTemplate(){
+  const cards = [
+    { t:'What is pollination?', i:'leaf', c:'Pollination is the transfer of pollen from a flower\u2019s male anther to its female stigma, letting a plant produce seeds and fruit. Roughly 75% of flowering plant species rely on animals \u2014 mostly insects \u2014 to do this transfer for them.' },
+    { t:'Complete vs. incomplete metamorphosis', i:'info', c:'Beetles, moths, butterflies, wasps, ants and bees all go through complete metamorphosis: egg \u2192 larva \u2192 pupa \u2192 adult, four totally different body forms. Dragonflies instead go through incomplete metamorphosis, hatching as nymphs that gradually grow adult features across several molts with no pupal stage.' },
+    { t:'Why insects migrate', i:'explore', c:'Unlike bird migration, many insect migrations \u2014 like the monarch butterfly\u2019s \u2014 span several generations. No single monarch completes the round trip; it takes four or five successive generations to finish one annual migratory cycle.' },
+    { t:'Structural color vs. pigment', i:'cube', c:'Many of the most vivid colors in this guide, from a blue morpho\u2019s wings to a jewel beetle\u2019s shell, aren\u2019t pigment at all. Microscopic ridges and layers in the surface bend light at specific wavelengths, a phenomenon called structural color \u2014 which is why these colors can look different depending on the viewing angle.' },
+    { t:'Ecological roles, in short', i:'map', c:'Species in this guide fill a handful of recurring ecological roles: pollinators move genetic material between plants; predators and parasitoids regulate the populations of other insects; decomposers like dung beetles and stag beetle larvae recycle nutrients back into soil; and apex predators like eagles and owls keep prey populations in balance.' },
+    { t:'Why so many species are declining', i:'habitat', c:'Habitat loss, pesticide use and climate-driven shifts in bloom and migration timing are the three most consistently cited pressures on pollinator and songbird populations worldwide. Field guides like this one exist partly to build the kind of species-level familiarity that makes those declines legible in the first place.' },
+  ];
+  return `
+    <div class="learn-view">
+      <h1>Field Notes</h1>
+      <p class="lede">Short, practical background for reading the rest of this guide.</p>
+      ${cards.map(c=>`<div class="learn-card"><h3>${icon(c.i,17)} ${c.t}</h3><p>${c.c}</p></div>`).join('')}
+    </div>`;
+}
+
+/* ---------------- NOTES VIEW ---------------- */
+function notesTemplate(){
+  const all = Store.getNotes();
+  const ids = Object.keys(all);
+  if(!ids.length){
+    return `<div class="notes-view"><h1>Your Notebook</h1>${emptyState()}</div>`;
+  }
+  let rows = '';
+  ids.forEach(id=>{
+    const sp = byId(id); if(!sp) return;
+    all[id].forEach((n,idx)=>{
+      rows += `<div class="note-item" onclick="App.selectSpecies('${id}')">
+        <h4>${sp.name} <span style="color:var(--ink-faint);font-weight:400;">\u00b7 ${new Date(n.date).toLocaleDateString()}</span></h4>
+        <p>${escapeHtml(n.text)}</p>
+      </div>`;
+    });
+  });
+  return `<div class="notes-view"><h1>Your Notebook</h1>${rows}</div>`;
+}
+
+/* ---------------- DETAIL VIEW ---------------- */
+function detailTemplate(id){
+  const sp = byId(id);
+  if(!sp){ return collectionTemplate(); }
+  const showingModel = state.show3D && sp.model;
+  return `
+    <div class="topbar">
+      <button class="back-link" onclick="App.backToCollection()"><span style="display:inline-flex;transform:scaleX(-1);">${icon('chevron',16)}</span> Back to Collection</button>
+      <div class="name-tag">
+        <span class="pin">${icon('pin',20)}</span>
+        <h2>${sp.name}</h2>
+        <p>${sp.sci}</p>
+      </div>
+      <div class="topbar-actions">
+        <button class="action-btn" onclick="App.openNotebook()">${icon('notebook',18)}<span class="lbl">Notebook</span></button>
+        <button class="action-btn ${state.compare.includes(sp.id)?'active':''}" onclick="App.toggleCompare('${sp.id}')">${icon('compare',18)}<span class="lbl">Compare</span></button>
+        <button class="action-btn" onclick="App.share()">${icon('share',18)}<span class="lbl">Share</span></button>
+        <div class="action-divider"></div>
+        <button class="action-btn" id="moreBtn" onclick="App.toggleMore()">${icon('more',18)}<span class="lbl">More</span></button>
+        <button class="action-btn info-toggle-mobile" onclick="App.toggleDetailMobile(true)">${icon('info',18)}<span class="lbl">Info</span></button>
+      </div>
+    </div>
+
+    <div class="viewer">
+      <div class="viewer-stage">
+        ${showingModel ? modelEmbedHtml(sp) : `<div class="viewer-img-wrap" id="viewerImgWrap">${photoOrPlaceholderHtml(sp)}</div>`}
+        <div class="viewer-side">${sideButtonsHtml(sp)}</div>
+      </div>
+    </div>
+    ${showingModel ? `
+    <div class="viewer-bottom">
+      <span class="viewer-mode-pill">${icon('cube',13)} Real 3D model \u2014 drag to orbit</span>
+      <button class="round-btn" onclick="App.toggleCube()" title="Back to photo">${icon('close',15)}</button>
+    </div>` : `
+    <div class="viewer-bottom">
+      <button class="round-btn" onclick="App.rotateReset()" title="Reset">${icon('reset',16)}</button>
+      <span class="deg-pill" id="degPill">${state.rotate}\u00b0</span>
+      <input type="range" min="-180" max="180" value="${state.rotate}" class="rotate-slider" id="rotateSlider" oninput="App.rotateFromSlider(this.value)">
+      <button class="round-btn" onclick="App.openFullscreen()" title="Fullscreen">${icon('fullscreen',15)}</button>
+    </div>`}
+    <div class="quote-strip"><span class="qtext">\u201c${state.quote}\u201d</span><button onclick="App.shuffleQuote()" title="New quote">${icon('shuffle',13)}</button></div>
+  `;
+}
+
+function photoOrPlaceholderHtml(sp){
+  return sp.verified && sp.img
+    ? `<img class="viewer-img" id="viewerImg" src="${sp.img}" alt="${sp.name}" onerror="renderPlaceholderInViewer()">`
+    : placeholderArtHtml(sp);
+}
+
+function modelEmbedHtml(sp){
+  const m = sp.model;
+  if(m && m.type === 'sketchfab'){
+    return `<div class="model-embed-wrap">
+      <span class="model-badge">${icon('cube',12)} Sketchfab 3D model</span>
+      <iframe title="${sp.name} 3D model" src="https://sketchfab.com/models/${m.id}/embed?autostart=1&transparent=1&ui_theme=dark"
+        allow="autoplay; fullscreen; xr-spatial-tracking" xr-spatial-tracking></iframe>
+    </div>`;
+  }
+  if(m && m.type === 'glb'){
+    return `<div class="model-embed-wrap">
+      <span class="model-badge">${icon('cube',12)} 3D model</span>
+      <model-viewer src="${m.url}" camera-controls auto-rotate shadow-intensity="1" alt="${sp.name} 3D model"></model-viewer>
+    </div>`;
+  }
+  return `<div class="viewer-img-wrap" id="viewerImgWrap">${photoOrPlaceholderHtml(sp)}</div>`;
+}
+
+function sideButtonsHtml(sp){
+  const hasModel = !!(sp && sp.model);
+  return `
+    <button class="side-btn ${(state.show3D&&hasModel)||state.autoRotateTimer?'active':''}" onclick="App.toggleCube()" title="${hasModel?'Toggle real 3D model':'Auto-rotate (no 3D model linked \u2014 see More menu)'}">${icon('cube',18)}<span>3D</span></button>
+    <button class="side-btn ${state.zoomIdx!==1?'active':''}" onclick="App.cycleZoom()">${icon('ruler',18)}<span>Size</span></button>
+    <button class="side-btn ${state.scopeOn?'active':''}" onclick="App.toggleScope()">${icon('crosshair',18)}<span>Scope</span></button>
+    <button class="side-btn" onclick="App.openAR()">${icon('camera',18)}<span>AR View</span></button>
+  `;
+}
+
+function placeholderArtHtml(sp){
+  const cat = catInfo(sp.category);
+  return `<div class="placeholder-art viewer-img" id="viewerImg" style="background:${phGradient(sp.category)}">
+      <span class="ph-icon">${icon(cat.icon,44)}</span>
+      <span class="ph-initial">${sp.name[0]}</span>
+      <span class="ph-label">Illustrated placeholder</span>
+    </div>
+    <div class="placeholder-note">${icon('info',13)} No verified photo yet \u2014 <a href="${commonsSearchUrl(sp.commonsQuery)}" target="_blank" rel="noopener">find one on Wikimedia Commons</a></div>`;
+}
+window.renderPlaceholderInViewer = function(){
+  const sp = byId(state.speciesId); if(!sp) return;
+  const wrap = $('#viewerImgWrap'); if(!wrap) return;
+  wrap.innerHTML = placeholderArtHtml(sp);
+};
+
+function afterDetailRender(){
+  renderDetailPanel();
+  applyViewerTransform();
+  renderCompareTray();
+  attachDragRotate();
+  attachScopeMagnifier();
+}
+
+function renderSideButtons(){
+  const sp = byId(state.speciesId); if(!sp) return;
+  const wrap = $('.viewer-side'); if(!wrap) return;
+  wrap.innerHTML = sideButtonsHtml(sp);
+}
+
+/* ---------------- DETAIL PANEL (right column) ---------------- */
+function renderDetailPanel(){
+  const panel = $('#detailPanel');
+  const sp = byId(state.speciesId);
+  if(!sp){ panel.innerHTML=''; return; }
+  const rows = [
+    ['info','Species Details', sp.details],
+    ['leaf','Behavior & Traits', sp.traits],
+    ['bee','Diet', sp.diet],
+    ['map','Range', sp.range],
+    ['explore','Ecological Role', sp.role],
+  ];
+  panel.innerHTML = `
+    <button class="detail-close-mobile" style="position:absolute;top:14px;right:14px;" onclick="App.toggleDetailMobile(false)" aria-label="Close details">${icon('close',16)}</button>
+    <div class="detail-top">
+      <span class="family-badge" style="${badgeStyle(sp.family)}">${sp.family}</span>
+      <div class="fieldguide-note">
+        <div class="fg-label">Field Guide</div>
+        <div class="fg-no">No. ${String(sp.guideNo).padStart(2,'0')}</div>
+      </div>
+    </div>
+    <h2 class="detail-name">${sp.name}</h2>
+    <div class="detail-sci">${sp.sci}</div>
+    <div class="detail-tags">${sp.tags.map(t=>`<span class="tag-chip" style="${chipStyle(t)}">${t}</span>`).join('')}</div>
+    <div class="detail-divider"></div>
+    <div class="info-rows">
+      ${rows.map(([ic,label,text])=>`
+        <div class="info-row">
+          <span class="info-icon" style="${badgeStyle(label)}">${icon(ic,15)}</span>
+          <div><h4>${label}</h4><p>${text}</p></div>
+        </div>`).join('')}
+    </div>
+    <div class="habitat-card">
+      <div class="hc-label">${icon('habitat',13)} Habitat</div>
+      <div class="habitat-visual" style="background:${phGradient(sp.category)}">${sp.habitat}</div>
+    </div>
+    <div class="notebook-btn-row">
+      <button class="notebook-open-btn" onclick="App.openNotebook()">${icon('notebook',15)} Open field notebook</button>
+    </div>
+  `;
+}
+
+/* ---------------- NOTEBOOK DRAWER ---------------- */
+function renderNotebookDrawer(){
+  const sp = byId(state.speciesId);
+  const drawer = $('#notebookDrawer');
+  if(!sp){ drawer.innerHTML = `<div class="drawer-head"><h2>Notebook</h2><button onclick="App.closeNotebook()">${icon('close',18)}</button></div><p style="color:var(--ink-soft);font-size:13px;">Open a species first to take notes on it.</p>`; return; }
+  const notes = (Store.getNotes()[sp.id]) || [];
+  drawer.innerHTML = `
+    <div class="drawer-head"><h2>Notes \u2014 ${sp.name}</h2><button onclick="App.closeNotebook()">${icon('close',18)}</button></div>
+    <textarea id="notebookText" placeholder="Field notes, sightings, questions\u2026"></textarea>
+    <button class="drawer-save" onclick="App.saveNote()">Save note</button>
+    <div class="saved-hint" id="savedHint"></div>
+    <div style="margin-top:18px;display:flex;flex-direction:column;gap:8px;">
+      ${notes.map((n,idx)=>`
+        <div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:10px;padding:10px 12px;position:relative;">
+          <p style="font-size:12.5px;white-space:pre-wrap;padding-right:20px;">${escapeHtml(n.text)}</p>
+          <div style="font-size:10.5px;color:var(--ink-faint);margin-top:5px;">${new Date(n.date).toLocaleString()}</div>
+          <button onclick="App.deleteNote(${idx})" style="position:absolute;top:8px;right:8px;color:var(--ink-faint);">${icon('close',13)}</button>
+        </div>`).join('') || `<p style="font-size:12px;color:var(--ink-faint);">No notes yet for this species.</p>`}
+    </div>
+  `;
+}
+
+/* ---------------- COMPARE ---------------- */
+function renderCompareTray(){
+  const tray = $('#compareTray');
+  if(!state.compare.length){ tray.classList.add('hide'); return; }
+  tray.classList.remove('hide');
+  tray.innerHTML = `
+    ${state.compare.map(id=>{
+      const sp = byId(id); if(!sp) return '';
+      return `<div class="ct-thumb">${sp.verified&&sp.img?`<img src="${sp.img}" onerror="this.remove()">`:sp.name[0]}</div>`;
+    }).join('')}
+    <span style="font-size:12px;">${state.compare.length} selected</span>
+    <button class="compare-tray-btn" onclick="App.openCompare()">Compare</button>
+  `;
+}
+function renderCompareModal(){
+  const wrap = $('#compareModalWrap');
+  const list = state.compare.map(byId).filter(Boolean);
+  if(!list.length){ wrap.classList.remove('show'); return; }
+  const rows = [
+    ['Family', s=>s.family],
+    ['Habitat', s=>s.habitat],
+    ['Diet', s=>s.diet],
+    ['Range', s=>s.range],
+    ['Ecological Role', s=>s.role],
+  ];
+  $('#compareModal').innerHTML = `
+    <div class="compare-modal-head">
+      <h2 style="font-size:18px;">Compare Species</h2>
+      <button onclick="App.closeCompare()">${icon('close',20)}</button>
+    </div>
+    <div style="overflow-x:auto;">
+    <table class="compare-table">
+      <thead><tr><th></th>${list.map(s=>`<th>${s.name}<button class="compare-remove" onclick="App.removeCompare('${s.id}')" style="margin-left:8px;">${icon('close',12)}</button></th>`).join('')}</tr></thead>
+      <tbody>
+        ${rows.map(([label,fn])=>`<tr><td class="row-label">${label}</td>${list.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`).join('')}
+      </tbody>
+    </table>
+    </div>
+  `;
+}
+
+/* ============================================================
+   SHELL / STATIC CHROME (sidebar overlay state, etc.)
+   ============================================================ */
+function renderShellChrome(){
+  $('#sidebar').classList.toggle('show', state.sidebarOpen);
+  $('#sidebarOverlay').classList.toggle('show', state.sidebarOpen);
+  $('#detailPanel').classList.toggle('show', state.detailOpenMobile);
+}
+
+/* ============================================================
+   MASTER RENDER
+   ============================================================ */
+function render(){
+  renderSidebar();
+  renderMain();
+  renderShellChrome();
+  renderCompareTray();
+  closeMoreMenu();
+}
+
+/* ---------- init ---------- */
+document.addEventListener('keydown', e=>{
+  if(e.key !== 'Escape') return;
+  closeAnyMenu();
+  if($('#lightbox').classList.contains('show')) return App.closeLightbox();
+  if($('#arModal').classList.contains('show')) return App.closeAR();
+  if($('#compareModalWrap').classList.contains('show')) return App.closeCompare();
+  if($('#modelInfoWrap').classList.contains('show')) return App.closeModelInfo();
+  if($('#aboutModalWrap').classList.contains('show')) return App.closeAbout();
+  if($('#notebookDrawer').classList.contains('show')) return App.closeNotebook();
+  if(state.detailOpenMobile) return App.toggleDetailMobile(false);
+  if(state.sidebarOpen) return App.toggleSidebar(false);
+});
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  parseRoute();
+  render();
+});
+})();
