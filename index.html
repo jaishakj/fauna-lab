@@ -1,79 +1,61 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fauna Lab — Explore. Learn. Protect.</title>
-<meta name="description" content="An interactive field guide to insects and birds.">
-<link rel="stylesheet" href="style.css">
-<script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Field Guide — Vol. I · Insecta &amp; Aves</title>
+  <meta name="description" content="An interactive field guide to insects and birds — every specimen with a real, orbit-able 3D model, field notes, and side-by-side comparison." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23264653'/%3E%3Cpath d='M16 8v16M16 10C11 5 5 6 5 12c0 5 5 7 11 5M16 10c5-5 11-4 11 2 0 5-5 7-11 5' stroke='%23e9c46a' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <button id="menuToggle" class="menu-toggle" aria-label="Toggle index">
+    <span></span><span></span><span></span>
+  </button>
+  <div id="scrim" class="scrim"></div>
 
-  <div class="mobile-header">
-    <button class="hamburger" onclick="App.toggleSidebar(true)" aria-label="Open menu">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-    </button>
-    <strong style="font-family:'Fraunces',serif;font-size:16px;">Fauna Lab</strong>
-    <span style="width:36px"></span>
+  <div class="app">
+    <aside id="sidebar" class="sidebar">
+      <div class="brand">
+        <div class="wordmark">Field Guide</div>
+        <div class="volume">Vol. I — Insecta &amp; Aves</div>
+        <div class="compiled">compiled 2026 · specimens in 3D</div>
+      </div>
+
+      <div class="controls">
+        <div class="search-wrap">
+          <input id="search" type="search" placeholder="Search name, family, tag…" autocomplete="off" />
+          <span class="kbd">/</span>
+        </div>
+        <div class="controls-row">
+          <label for="sort">Sort</label>
+          <select id="sort">
+            <option value="catalog">Catalog №</option>
+            <option value="name-asc">Name A–Z</option>
+            <option value="name-desc">Name Z–A</option>
+            <option value="family">By family</option>
+          </select>
+        </div>
+        <span id="matchCount" class="match-count"></span>
+      </div>
+
+      <nav id="nav" class="nav" aria-label="Species index"></nav>
+
+      <div class="sidebar-foot">
+        3D specimens streamed from Sketchfab ·<br />
+        add a species in <b>data.js</b> — one line per model
+      </div>
+    </aside>
+
+    <main id="main" class="main">
+      <div id="view" class="view"></div>
+    </main>
   </div>
-
-  <div class="shell">
-    <div class="overlay" id="sidebarOverlay" onclick="App.toggleSidebar(false)"></div>
-    <aside class="sidebar" id="sidebar"></aside>
-    <main class="main" id="main"></main>
-    <aside class="detail-panel" id="detailPanel"></aside>
-  </div>
-
-  <!-- Notebook drawer -->
-  <div class="overlay" id="drawerOverlay" onclick="App.closeNotebook()"></div>
-  <div class="drawer" id="notebookDrawer"></div>
-
-  <!-- Compare tray + modal -->
-  <div class="compare-tray hide" id="compareTray"></div>
-  <div class="compare-modal-wrap" id="compareModalWrap" onclick="if(event.target===this) App.closeCompare()">
-    <div class="compare-modal" id="compareModal"></div>
-  </div>
-
-  <!-- 3D model info modal -->
-  <div class="compare-modal-wrap" id="modelInfoWrap" onclick="if(event.target===this) App.closeModelInfo()">
-    <div class="compare-modal" id="modelInfoModal" style="max-width:560px;"></div>
-  </div>
-
-  <!-- About modal -->
-  <div class="compare-modal-wrap" id="aboutModalWrap" onclick="if(event.target===this) App.closeAbout()">
-    <div class="compare-modal" id="aboutModal" style="max-width:520px;"></div>
-  </div>
-
-  <!-- Lightbox -->
-  <div class="lightbox" id="lightbox" onclick="if(event.target===this) App.closeLightbox()">
-    <button class="lightbox-close" onclick="App.closeLightbox()">✕</button>
-    <img id="lightboxImg" alt="">
-    <div class="placeholder-art" id="lightboxPh" style="display:none;max-width:420px;max-height:420px;width:60vw;height:60vw;">
-      <span class="ph-initial"></span>
-    </div>
-  </div>
-
-  <!-- AR modal -->
-  <div class="ar-modal" id="arModal">
-    <video class="ar-video" id="arVideo" autoplay playsinline muted></video>
-    <div class="ar-error" id="arError"></div>
-    <div class="ar-sticker" id="arSticker"></div>
-    <div class="ar-topbar">
-      <span class="ar-pill">AR Field View</span>
-      <button class="ar-close" onclick="App.closeAR()">✕</button>
-    </div>
-    <div style="position:absolute;bottom:24px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:2;">
-      <button class="ar-close" onclick="App.arGrow()" title="Bigger">＋</button>
-      <button class="ar-close" onclick="App.arShrink()" title="Smaller">－</button>
-    </div>
-    <div class="ar-hint">Drag the sticker to place it &middot; use ＋ / － to resize</div>
-  </div>
-
-  <div class="toast-wrap" id="toastWrap"></div>
 
   <script src="data.js"></script>
-  <script src="icons.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
