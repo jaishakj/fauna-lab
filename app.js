@@ -1,875 +1,654 @@
-/* ============================================================
-   FAUNA LAB — APP LOGIC
-   ============================================================ */
-(function(){
+/* ============================================================================
+   FIELD GUIDE · Vol. I — Insecta & Aves  (app.js · vanilla JS, no framework)
+   ----------------------------------------------------------------------------
+   Views:      #/  (home) · #/species/:id · #/notebook · #/compare
+   Storage:    fieldguide.notes.v1   — per-species field notes
+               fieldguide.compare.v1 — comparison tray (max 4)
+   Data:       everything comes from data.js (SPECIES). Add a species there
+               and every view below picks it up automatically.
+   ============================================================================ */
+
 "use strict";
 
-/* ---------- helpers ---------- */
-const $ = (sel, el=document) => el.querySelector(sel);
-const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
-const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
-const byId = id => SPECIES.find(s => s.id === id);
-const catInfo = key => CATEGORIES.find(c => c.key === key);
-const hashOf = s => s.split('#')[1] ? '#'+s.split('#')[1] : s;
+/* -------------------------------------------------------------------------- */
+/*  utilities                                                                  */
+/* -------------------------------------------------------------------------- */
 
-function strHash(str){ let h=0; for(let i=0;i<str.length;i++){ h = (h*31 + str.charCodeAt(i)) >>> 0; } return h; }
+const $  = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-const CHIP_PALETTE = [
-  {bg:'#DCEAF3', ink:'#3E6E93'}, {bg:'#E1EFDD', ink:'#4A7A3E'},
-  {bg:'#F5DEDC', ink:'#A24B3E'}, {bg:'#F3E7C4', ink:'#8A6B1E'},
-  {bg:'#E7DFF3', ink:'#6B4FA0'}, {bg:'#E8D9C8', ink:'#7A5231'},
-];
-const BADGE_PALETTE = [
-  {bg:'#E7DFF3', ink:'#6B4FA0'}, {bg:'#F5DEDC', ink:'#A24B3E'},
-  {bg:'#DCEAF3', ink:'#3E6E93'}, {bg:'#E1EFDD', ink:'#4A7A3E'},
-  {bg:'#F3E7C4', ink:'#8A6B1E'},
-];
-const PH_GRADIENTS = {
-  bees:['#D8A93F','#B07C1F'], butterflies:['#C2603A','#8F3F23'], moths:['#6E5A8B','#4A3A63'],
-  beetles:['#6E8B5E','#476139'], dragonflies:['#3E8B93','#255E64'], wasps:['#BE6A2C','#8A4718'],
-  ants:['#7A5B3E','#523C29'], hummingbirds:['#C2603A','#93472A'], songbirds:['#8B6E4C','#61492F'],
-  raptors:['#5C6B4C','#3C4630'], owls:['#5B5240','#3A342A'], waterfowl:['#3E7A8B','#28535F'],
+const esc = (s) =>
+  String(s ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+  );
+
+const pad3 = (n) => String(n).padStart(3, "0");
+
+const store = {
+  get(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
+    catch { return fallback; }
+  },
+  set(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private mode */ }
+  },
 };
 
-function chipStyle(text){ const p = CHIP_PALETTE[strHash(text)%CHIP_PALETTE.length]; return `background:${p.bg};color:${p.ink}`; }
-function badgeStyle(text){ const p = BADGE_PALETTE[strHash(text)%BADGE_PALETTE.length]; return `background:${p.bg};color:${p.ink}`; }
-function phGradient(catKey){ const g = PH_GRADIENTS[catKey]||['#8B7B5E','#61533C']; return `linear-gradient(150deg, ${g[0]}, ${g[1]})`; }
-function commonsSearchUrl(q){ return `https://commons.wikimedia.org/w/index.php?search=${encodeURIComponent(q)}&title=Special:MediaSearch&type=image`; }
+let toastTimer;
+function toast(msg) {
+  let t = $(".toast");
+  if (!t) {
+    t = document.createElement("div");
+    t.className = "toast";
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  requestAnimationFrame(() => t.classList.add("show"));
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2400);
+}
 
-/* ---------- storage ---------- */
-const Store = {
-  notesKey: 'faunalab.notes.v1',
-  compareKey: 'faunalab.compare.v1',
-  getNotes(){ try{ return JSON.parse(localStorage.getItem(this.notesKey)) || {}; }catch(e){ return {}; } },
-  saveNote(id, text){
-    const all = this.getNotes();
-    if(!all[id]) all[id] = [];
-    all[id].unshift({ text, date: new Date().toISOString() });
-    localStorage.setItem(this.notesKey, JSON.stringify(all));
-  },
-  deleteNoteAt(id, idx){
-    const all = this.getNotes();
-    if(all[id]){ all[id].splice(idx,1); if(!all[id].length) delete all[id]; }
-    localStorage.setItem(this.notesKey, JSON.stringify(all));
-  },
-  getCompare(){ try{ return JSON.parse(localStorage.getItem(this.compareKey)) || []; }catch(e){ return []; } },
-  setCompare(list){ localStorage.setItem(this.compareKey, JSON.stringify(list)); }
-};
+/* -------------------------------------------------------------------------- */
+/*  data access                                                                */
+/* -------------------------------------------------------------------------- */
 
-/* ---------- state ---------- */
+const BY_ID = Object.fromEntries(SPECIES.map((s, i) => [s.id, { ...s, no: i + 1 }]));
+const CLASSES = [...new Set(SPECIES.map((s) => s.class))];
+
 const state = {
-  view:'collection', speciesId:null, classFilter:null, categoryFilter:null, habitatFilter:null,
-  query:'', sort:'guide', searchOpen:false,
-  rotate:0, zoomIdx:1, scopeOn:false, autoRotateTimer:null, show3D:false,
-  compare: Store.getCompare(), sidebarOpen:false, detailOpenMobile:false,
-  openGroups:{Insects:true, Birds:true},
-  quote: QUOTES[Math.floor(Math.random()*QUOTES.length)],
-  discovery: DISCOVERIES[Math.floor(Math.random()*DISCOVERIES.length)],
+  query: "",
+  sort: "catalog",
+  compare: store.get("fieldguide.compare.v1", []),
+  notes: store.get("fieldguide.notes.v1", {}),
 };
 
-/* ---------- routing ---------- */
-function parseRoute(){
-  const h = location.hash.replace(/^#\/?/, '');
-  const parts = h.split('/').filter(Boolean);
-  if(parts[0] === 'species' && parts[1]){ state.view='detail'; state.speciesId=decodeURIComponent(parts[1]); return; }
-  if(parts[0] === 'notes'){ state.view='notes'; return; }
-  if(parts[0] === 'learn'){ state.view='learn'; return; }
-  state.view='collection';
-  state.classFilter=null; state.categoryFilter=null; state.habitatFilter=null; state.query='';
-  for(let i=1;i<parts.length;i+=2){
-    const k=parts[i], v=decodeURIComponent(parts[i+1]||'');
-    if(k==='cat') state.categoryFilter=v;
-    if(k==='class') state.classFilter=v;
-    if(k==='habitat') state.habitatFilter=v;
-    if(k==='q') state.query=v;
+const MAX_COMPARE = 4;
+
+function sortedFiltered() {
+  const q = state.query.trim().toLowerCase();
+  let list = SPECIES.map((s, i) => ({ ...s, no: i + 1 }));
+  if (q) {
+    list = list.filter((s) =>
+      [s.common, s.latin, s.family, s.order, s.class, ...(s.tags || [])]
+        .join(" ").toLowerCase().includes(q)
+    );
   }
-}
-function go(hash){ location.hash = hash; }
-window.addEventListener('hashchange', ()=>{ parseRoute(); resetViewerState(); render(); });
-
-function resetViewerState(){ state.rotate=0; state.zoomIdx=1; state.scopeOn=false; state.show3D=false; stopAutoRotate(); }
-
-/* ---------- App (exposed for inline onclick handlers) ---------- */
-const App = {
-  toggleSidebar(force){ state.sidebarOpen = force!==undefined?force:!state.sidebarOpen; renderShellChrome(); },
-  toggleDetailMobile(force){ state.detailOpenMobile = force!==undefined?force:!state.detailOpenMobile; renderShellChrome(); },
-  navHome(){ go('#/collection'); App.toggleSidebar(false); },
-  navExplore(){ go('#/collection'); App.toggleSidebar(false); },
-  navNotes(){ go('#/notes'); App.toggleSidebar(false); },
-  navHabitat(){
-    state.view='collection'; state.categoryFilter=null; state.classFilter=null; state.habitatFilter=null; state.query='';
-    state.habitatMode=true;
-    if(location.hash !== '#/collection') location.hash = '#/collection';
-    App.toggleSidebar(false); render();
-  },
-  navLearn(){ go('#/learn'); App.toggleSidebar(false); },
-  navMore(){ toggleAppMoreMenu(); },
-
-  toggleClassGroup(cls){ state.openGroups[cls] = !state.openGroups[cls]; renderSidebar(); },
-  selectCategory(key){ go('#/collection/cat/'+key); App.toggleSidebar(false); },
-  clearFilters(){ go('#/collection'); },
-
-  openSearch(){ state.searchOpen = !state.searchOpen; renderSidebar(); if(state.searchOpen) setTimeout(()=>{ const el=$('#sidebarSearch'); if(el) el.focus(); },10); },
-  runSearch(val){
-    state.query = val;
-    if(val){ state.categoryFilter=null; state.classFilter=null; state.habitatFilter=null; }
-    state.view = 'collection';
-    const active = document.activeElement;
-    const wasFocused = active && active.id === 'sidebarSearch';
-    const caret = wasFocused ? active.selectionStart : null;
-    renderSidebar();
-    if(wasFocused){
-      const el = $('#sidebarSearch');
-      if(el){ el.focus(); if(caret!=null) el.setSelectionRange(caret, caret); }
-    }
-    renderMain();
-  },
-  cycleSort(){
-    const order = ['guide','az','category'];
-    state.sort = order[(order.indexOf(state.sort)+1)%order.length];
-    renderMain();
-  },
-
-  selectSpecies(id){ go('#/species/'+id); },
-  backToCollection(){ go('#/collection'); },
-
-  setHabitatFilter(h){ go('#/collection/habitat/'+encodeURIComponent(h)); },
-
-  rotateDelta(delta){
-    state.rotate = Math.max(-180, Math.min(180, state.rotate+delta));
-    applyViewerTransform();
-  },
-  rotateReset(){ state.rotate = 0; state.zoomIdx=1; applyViewerTransform(); },
-  rotateFromSlider(val){ state.rotate = parseInt(val,10); applyViewerTransform(); },
-  toggleCube(){
-    const sp = byId(state.speciesId);
-    if(sp && sp.model){ state.show3D = !state.show3D; renderMain(); }
-    else{ App.toggleAutoRotate(); }
-  },
-  toggleAutoRotate(){
-    if(state.autoRotateTimer){ stopAutoRotate(); }
-    else{
-      state.autoRotateTimer = setInterval(()=>{ state.rotate = (state.rotate+2); if(state.rotate>180) state.rotate-=360; applyViewerTransform(true); }, 40);
-    }
-    renderSideButtons();
-  },
-  cycleZoom(){ state.zoomIdx = (state.zoomIdx+1)%3; applyViewerTransform(); renderSideButtons(); },
-  toggleScope(){
-    state.scopeOn = !state.scopeOn; renderSideButtons();
-    const img=$('#viewerImg'); if(img) img.style.cursor = state.scopeOn?'crosshair':'grab';
-    if(!state.scopeOn) applyViewerTransform();
-  },
-  openFullscreen(){
-    const sp = byId(state.speciesId); if(!sp) return;
-    const lb = $('#lightbox');
-    const img = $('#lightboxImg');
-    if(sp.verified && sp.img){ img.style.display='block'; img.src = sp.img; $('#lightboxPh').style.display='none'; }
-    else{ img.style.display='none'; const ph=$('#lightboxPh'); ph.style.display='flex'; ph.style.background=phGradient(sp.category); ph.querySelector('.ph-initial').textContent = sp.name[0]; }
-    lb.classList.add('show');
-  },
-  closeLightbox(){ $('#lightbox').classList.remove('show'); },
-
-  openNotebook(){
-    const drawer = $('#notebookDrawer'); const overlay=$('#drawerOverlay');
-    drawer.classList.add('show'); overlay.classList.add('show');
-    renderNotebookDrawer();
-  },
-  closeNotebook(){ $('#notebookDrawer').classList.remove('show'); $('#drawerOverlay').classList.remove('show'); },
-  saveNote(){
-    const ta = $('#notebookText'); const val = ta.value.trim();
-    if(!val) return;
-    Store.saveNote(state.speciesId, val);
-    ta.value='';
-    renderNotebookDrawer();
-    const hint = $('#savedHint'); hint.textContent='Saved.'; setTimeout(()=>{ if(hint) hint.textContent=''; },1600);
-  },
-  deleteNote(idx){ Store.deleteNoteAt(state.speciesId, idx); renderNotebookDrawer(); },
-  goToNoteSpecies(id){ App.closeNotebook(); go('#/species/'+id); },
-
-  toggleCompare(id, ev){
-    if(ev) ev.stopPropagation();
-    const i = state.compare.indexOf(id);
-    if(i>-1) state.compare.splice(i,1);
-    else{ if(state.compare.length>=4){ showToast('You can compare up to 4 species at a time.'); return; } state.compare.push(id); }
-    Store.setCompare(state.compare);
-    renderMain(); renderCompareTray();
-  },
-  removeCompare(id){ state.compare = state.compare.filter(x=>x!==id); Store.setCompare(state.compare); renderCompareTray(); renderCompareModal(); renderMain(); },
-  openCompare(){ if(state.compare.length<2){ showToast('Pick at least 2 species to compare.'); return; } $('#compareModalWrap').classList.add('show'); renderCompareModal(); },
-  closeCompare(){ $('#compareModalWrap').classList.remove('show'); },
-
-  share(){
-    const sp = byId(state.speciesId); if(!sp) return;
-    const text = `${sp.name} (${sp.sci}) — ${sp.details}`;
-    if(navigator.share){ navigator.share({title:sp.name, text}).catch(()=>{}); }
-    else{
-      navigator.clipboard && navigator.clipboard.writeText(text).then(()=>showToast('Copied to clipboard.'));
-    }
-  },
-  toggleMore(){ toggleSpeciesMoreMenu(); },
-  copyDetails(){
-    const sp = byId(state.speciesId); if(!sp) return;
-    const text = `${sp.name} (${sp.sci})\nFamily: ${sp.family}\n\n${sp.details}\n\nTraits: ${sp.traits}\nDiet: ${sp.diet}\nRange: ${sp.range}\nEcological role: ${sp.role}`;
-    navigator.clipboard && navigator.clipboard.writeText(text).then(()=>{ showToast('Details copied.'); closeMoreMenu(); });
-  },
-  printPage(){ closeMoreMenu(); window.print(); },
-
-  shuffleDiscovery(){ let d; do{ d = DISCOVERIES[Math.floor(Math.random()*DISCOVERIES.length)]; }while(d===state.discovery && DISCOVERIES.length>1); state.discovery=d; renderSidebar(); },
-  jumpToDiscovery(){ if(state.discovery) go('#/species/'+state.discovery.id); },
-  shuffleQuote(){ let q; do{ q = QUOTES[Math.floor(Math.random()*QUOTES.length)]; }while(q===state.quote && QUOTES.length>1); state.quote=q; $('.quote-strip .qtext').textContent = '\u201c'+q+'\u201d'; },
-
-  showAbout(){
-    closeAnyMenu();
-    const verifiedCount = SPECIES.filter(s=>s.verified).length;
-    $('#aboutModal').innerHTML = `
-      <div class="compare-modal-head"><h2 style="font-size:18px;">About Fauna Lab</h2><button onclick="App.closeAbout()">${icon('close',20)}</button></div>
-      <p style="font-size:13px;color:var(--ink-soft);line-height:1.65;">
-        A field guide to ${SPECIES.length} insects and birds, built as a fully interactive, offline-friendly web app.
-        Notes and comparisons are saved only in this browser, via <code>localStorage</code> — nothing is sent anywhere.
-      </p>
-      <p style="font-size:13px;color:var(--ink-soft);line-height:1.65;margin-top:10px;">
-        ${verifiedCount} of ${SPECIES.length} entries carry a photo verified against Wikimedia Commons at build time
-        (credited on each species page). The rest use an illustrated placeholder with a one-click link to search
-        Commons for a real photo — open a species\u2019s <strong>More</strong> menu to grab one.
-      </p>
-    `;
-    $('#aboutModalWrap').classList.add('show');
-  },
-  closeAbout(){ $('#aboutModalWrap').classList.remove('show'); },
-  clearNotebookData(){
-    closeAnyMenu();
-    if(confirm('Clear all saved notebook entries? This can\u2019t be undone.')){
-      localStorage.removeItem(Store.notesKey);
-      showToast('Notebook cleared.');
-      if(state.view==='notes') renderMain();
-    }
-  },
-
-  showModelInfo(){
-    closeAnyMenu();
-    $('#modelInfoModal').innerHTML = `
-      <div class="compare-modal-head"><h2 style="font-size:18px;">${icon('cube',18)} Add a real 3D model</h2><button onclick="App.closeModelInfo()">${icon('close',20)}</button></div>
-      <p style="font-size:13px;color:var(--ink-soft);line-height:1.65;">
-        Open <code>data.js</code>, find the species object you want, and add one <code>model</code> line. No other code changes needed \u2014 the viewer picks it up automatically and shows a real, orbit-able 3D model instead of the photo.
-      </p>
-      <p style="font-size:12px;font-weight:700;margin-top:14px;margin-bottom:6px;">Option A \u2014 Sketchfab (easiest, nothing to host)</p>
-      <div class="code-block">model: { type:'sketchfab', id:'2b5e1e1a4a...' },</div>
-      <p style="font-size:12px;color:var(--ink-soft);margin-top:8px;line-height:1.6;">
-        Go to sketchfab.com, search the species, filter results by <strong>Downloadable</strong> (usually means embeddable/CC-licensed), open a model, click <strong>Embed</strong>, and copy the 32-character ID from the embed URL
-        (<span style="white-space:nowrap;">sketchfab.com/models/<u>THIS PART</u>/embed</span>). Credit the artist per the license shown on the model page.
-      </p>
-      <p style="font-size:12px;font-weight:700;margin-top:14px;margin-bottom:6px;">Option B \u2014 self-hosted glTF/GLB file</p>
-      <div class="code-block">model: { type:'glb', url:'models/honeybee.glb' },</div>
-      <p style="font-size:12px;color:var(--ink-soft);margin-top:8px;line-height:1.6;">
-        Any direct URL to a <code>.glb</code>/<code>.gltf</code> file works \u2014 a relative path to a file you place next to <code>index.html</code>, or a link to one hosted elsewhere. This renders through
-        Google's <code>&lt;model-viewer&gt;</code>, already loaded in <code>index.html</code>, with full drag-to-orbit and auto-rotate built in.
-      </p>
-      <p style="font-size:12px;color:var(--ink-soft);margin-top:12px;line-height:1.6;">
-        <strong>Where to find real models:</strong> Sketchfab (large free/CC library), Smithsonian 3D (si.edu/3d \u2014 public-domain specimen scans), or CGTrader/TurboSquid for paid, higher-detail work. Always check the license before self-hosting a file \u2014 Sketchfab embeds inherit the creator's permitted usage automatically, which is why it's the easiest starting point.
-      </p>
-    `;
-    $('#modelInfoWrap').classList.add('show');
-  },
-  closeModelInfo(){ $('#modelInfoWrap').classList.remove('show'); },
-
-  openAR(){ openARModal(); },
-  closeAR(){ closeARModal(); },
-  arGrow(){ arSize = Math.min(320, arSize+24); const s=$('#arSticker'); if(s) s.style.width=arSize+'px'; },
-  arShrink(){ arSize = Math.max(60, arSize-24); const s=$('#arSticker'); if(s) s.style.width=arSize+'px'; },
-};
-window.App = App;
-
-/* ---------- viewer transform ---------- */
-function applyViewerTransform(auto){
-  const img = $('#viewerImg');
-  const zoomVals = [0.86, 1, 1.18];
-  if(img){ img.style.transformOrigin = '50% 50%'; img.style.transform = `rotateY(${state.rotate}deg) scale(${zoomVals[state.zoomIdx]})`; }
-  const pill = $('#degPill'); if(pill) pill.textContent = Math.round(state.rotate)+'\u00b0';
-  const slider = $('#rotateSlider'); if(slider) slider.value = state.rotate;
-}
-function stopAutoRotate(){ if(state.autoRotateTimer){ clearInterval(state.autoRotateTimer); state.autoRotateTimer=null; } }
-
-/* ---------- drag-to-rotate ---------- */
-function attachDragRotate(){
-  const img = $('#viewerImg'); if(!img) return;
-  let dragging=false, startX=0, startRotate=0;
-  img.addEventListener('pointerdown', e=>{
-    dragging=true; startX=e.clientX; startRotate=state.rotate; img.setPointerCapture(e.pointerId);
-    stopAutoRotate(); renderSideButtons();
-  });
-  img.addEventListener('pointermove', e=>{
-    if(!dragging) return;
-    const delta = (e.clientX-startX) * 0.6;
-    state.rotate = Math.max(-180, Math.min(180, startRotate+delta));
-    applyViewerTransform();
-  });
-  const end = ()=>{ dragging=false; };
-  img.addEventListener('pointerup', end);
-  img.addEventListener('pointerleave', end);
+  const byName = (a, b) => a.common.localeCompare(b.common);
+  if (state.sort === "name-asc") list.sort(byName);
+  if (state.sort === "name-desc") list.sort((a, b) => -byName(a, b));
+  if (state.sort === "family") list.sort((a, b) => a.family.localeCompare(b.family) || byName(a, b));
+  return list;
 }
 
-/* ---------- scope magnifier ---------- */
-function attachScopeMagnifier(){
-  const stage = $('.viewer-stage'); const img = $('#viewerImg'); if(!stage || !img) return;
-  stage.addEventListener('pointermove', e=>{
-    if(!state.scopeOn) return;
-    const r = stage.getBoundingClientRect();
-    const px = ((e.clientX-r.left)/r.width*100).toFixed(1);
-    const py = ((e.clientY-r.top)/r.height*100).toFixed(1);
-    img.style.transformOrigin = `${px}% ${py}%`;
-    img.style.transform = `rotateY(${state.rotate}deg) scale(2.1)`;
-  });
-  stage.addEventListener('pointerleave', ()=>{ if(state.scopeOn) applyViewerTransform(); });
-}
+/* -------------------------------------------------------------------------- */
+/*  illustrated plates (used when a species has no verified 3D model)          */
+/* -------------------------------------------------------------------------- */
 
-/* ---------- dropdown menu helper ---------- */
-function buildDropdown(anchorEl, itemsHtml){
-  closeAnyMenu();
-  const m = document.createElement('div');
-  m.className = 'dropdown-menu';
-  m.id='activeMenu';
-  m.style.cssText = 'position:absolute;z-index:30;background:var(--panel-solid);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-md);padding:6px;min-width:220px;';
-  const rect = anchorEl.getBoundingClientRect();
-  m.style.top = (rect.bottom+6+window.scrollY)+'px';
-  m.style.right = Math.max(10, window.innerWidth-rect.right)+'px';
-  m.innerHTML = itemsHtml;
-  Array.from(m.querySelectorAll('button,a')).forEach(b=>{
-    b.style.cssText += 'display:flex;gap:8px;align-items:center;width:100%;padding:9px 10px;border-radius:8px;font-size:12.5px;font-weight:600;text-align:left;';
-    b.addEventListener('mouseenter',()=>b.style.background='var(--bg-soft)');
-    b.addEventListener('mouseleave',()=>b.style.background='transparent');
-  });
-  document.body.appendChild(m);
-  setTimeout(()=>document.addEventListener('click', closeMenuOnOutsideClick),0);
-}
-function closeMenuOnOutsideClick(e){
-  const m = $('#activeMenu'); if(!m) return;
-  if(!m.contains(e.target) && e.target.id!=='moreBtn' && e.target.id!=='sidebarMoreBtn' && !(e.target.closest && e.target.closest('#sidebarMoreBtn'))){ closeAnyMenu(); }
-}
-function closeAnyMenu(){ const m=$('#activeMenu'); if(m) m.remove(); document.removeEventListener('click', closeMenuOnOutsideClick); }
-function closeMoreMenu(){ closeAnyMenu(); }
-
-function toggleSpeciesMoreMenu(){
-  const existing = $('#activeMenu'); if(existing){ closeAnyMenu(); return; }
-  const sp = byId(state.speciesId);
-  const btn = $('#moreBtn'); if(!btn) return;
-  let extra = '';
-  if(sp && !sp.verified){
-    extra = `<a href="${commonsSearchUrl(sp.commonsQuery)}" target="_blank" rel="noopener" style="color:var(--sage-ink);">${icon('link',16)} Find a real photo on Commons</a>`;
-  }
-  buildDropdown(btn, `
-    <button onclick="App.copyDetails()">${icon('notebook',16)} Copy field guide entry</button>
-    <button onclick="App.printPage()">${icon('download',16)} Print / save as PDF</button>
-    <button onclick="App.showModelInfo()">${icon('cube',16)} Add a real 3D model</button>
-    ${extra}
-  `);
-}
-function toggleAppMoreMenu(){
-  const existing = $('#activeMenu'); if(existing){ closeAnyMenu(); return; }
-  const btn = $('#sidebarMoreBtn'); if(!btn) return;
-  buildDropdown(btn, `
-    <button onclick="App.showAbout()">${icon('info',16)} About this guide</button>
-    <button onclick="App.showModelInfo()">${icon('cube',16)} Add a real 3D model</button>
-    <button onclick="App.clearNotebookData()">${icon('close',16)} Clear my saved notes</button>
-  `);
-}
-
-/* ---------- toast ---------- */
-function showToast(msg){
-  const wrap = $('#toastWrap');
-  const t = document.createElement('div');
-  t.className='toast';
-  t.innerHTML = `${icon('check',15)} <span>${msg}</span>`;
-  wrap.appendChild(t);
-  setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .25s'; setTimeout(()=>t.remove(),260); }, 2400);
-}
-
-/* ---------- AR ---------- */
-let arStream = null, arSize = 150;
-function openARModal(){
-  const sp = byId(state.speciesId);
-  const modal = $('#arModal'); modal.classList.add('show');
-  $('#arError').style.display='none';
-  const video = $('#arVideo');
-  navigator.mediaDevices && navigator.mediaDevices.getUserMedia ?
-    navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } }).then(stream=>{
-      arStream = stream; video.srcObject = stream; video.style.display='block';
-      setupSticker(sp);
-    }).catch(()=>{ showAROnlyPreview(sp); })
-    : showAROnlyPreview(sp);
-}
-function showAROnlyPreview(sp){
-  $('#arVideo').style.display='none';
-  $('#arError').style.display='flex';
-  $('#arError').innerHTML = `<div>${icon('camera',30)}<p style="margin-top:10px;">Camera access isn\u2019t available in this browser/context.<br>Here\u2019s the field guide sticker on its own \u2014 drag it around.</p></div>`;
-  setupSticker(sp);
-}
-function setupSticker(sp){
-  const s = $('#arSticker');
-  s.innerHTML = (sp.verified && sp.img) ? `<img src="${sp.img}" style="width:100%;display:block;filter:drop-shadow(0 8px 16px rgba(0,0,0,.45))" onerror="this.parentElement.style.background='${phGradient(sp.category).replace(/'/g,"\\'")}'; this.remove();">`
-    : `<div style="width:${arSize}px;height:${arSize}px;border-radius:20px;background:${phGradient(sp.category)};display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--font-display);font-size:32px;">${sp.name[0]}</div>`;
-  s.style.width = arSize+'px';
-  s.style.left = '50%'; s.style.top='45%'; s.style.transform='translate(-50%,-50%)';
-  let dragging=false, offX=0, offY=0;
-  s.onpointerdown = (e)=>{ dragging=true; s.setPointerCapture(e.pointerId); const r=s.getBoundingClientRect(); offX=e.clientX-r.left; offY=e.clientY-r.top; s.style.transform='none'; };
-  s.onpointermove = (e)=>{ if(!dragging) return; s.style.left = (e.clientX-offX)+'px'; s.style.top=(e.clientY-offY)+'px'; };
-  s.onpointerup = ()=>{ dragging=false; };
-}
-function closeARModal(){
-  $('#arModal').classList.remove('show');
-  if(arStream){ arStream.getTracks().forEach(t=>t.stop()); arStream=null; }
-}
-
-/* ============================================================
-   RENDER: SIDEBAR
-   ============================================================ */
-function renderSidebar(){
-  const totalCount = SPECIES.length;
-  const groups = ['Insects','Birds'];
-  const groupsHtml = groups.map(cls=>{
-    const cats = CATEGORIES.filter(c=>c.class===cls);
-    const open = state.openGroups[cls];
+function plateSVG(cls) {
+  if (cls === "Aves") {
     return `
-    <div class="class-group ${open?'open':''}">
-      <div class="class-group-head" onclick="App.toggleClassGroup('${cls}')">
-        <span>${cls}</span>
-        <span class="chev">${icon('chevron',14)}</span>
-      </div>
-      <div class="class-group-body">
-        ${cats.map(c=>{
-          const count = SPECIES.filter(s=>s.category===c.key).length;
-          const active = state.categoryFilter===c.key;
-          return `<div class="cat-row ${active?'active':''}" onclick="App.selectCategory('${c.key}')">
-            <span class="cat-icon">${icon(c.icon,17)}</span>
-            <span>
-              <div class="cat-name">${c.label}</div>
-              <div class="cat-count">${count} species</div>
-            </span>
-            <span class="chev">${icon('chevron',13)}</span>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>`;
-  }).join('');
-
-  $('#sidebar').innerHTML = `
-    <div class="brand">
-      ${icon('leaf',26,'')}
-      <div class="brand-text">
-        <h1>Fauna <em>Lab</em></h1>
-        <p>Explore &middot; Learn &middot; Protect</p>
-      </div>
-    </div>
-    <nav class="nav-list">
-      <div class="nav-item ${state.view==='collection'&&!state.categoryFilter?'active':''}" onclick="App.navHome()">${icon('home',18)}<span>Home</span></div>
-      <div class="nav-item ${state.view==='collection'&&state.categoryFilter?'active':''}" onclick="App.navExplore()">${icon('explore',18)}<span>Explore</span></div>
-      <div class="nav-item ${state.view==='notes'?'active':''}" onclick="App.navNotes()">${icon('notes',18)}<span>Notes</span></div>
-      <div class="nav-item" onclick="App.navHabitat()">${icon('habitat',18)}<span>Habitat</span></div>
-      <div class="nav-item ${state.view==='learn'?'active':''}" onclick="App.navLearn()">${icon('learn',18)}<span>Learn</span></div>
-      <div class="nav-item" onclick="App.navMore()" id="sidebarMoreBtn">${icon('more',18)}<span>More</span></div>
-    </nav>
-    <div class="panel-card">
-      <div class="species-panel-head">
-        <h2>Species <span class="count">${totalCount}</span></h2>
-        <div class="panel-tools">
-          <button class="tool-btn ${state.searchOpen?'active':''}" onclick="App.openSearch()" title="Search">${icon('search',15)}</button>
-          <button class="tool-btn" onclick="App.cycleSort()" title="Sort: ${state.sort}">${icon('sort',15)}</button>
-        </div>
-      </div>
-      ${state.searchOpen ? `<div class="search-row"><input id="sidebarSearch" type="text" placeholder="Search species\u2026" value="${escapeAttr(state.query)}" oninput="App.runSearch(this.value)"></div>` : ''}
-      ${groupsHtml}
-    </div>
-    <div class="panel-card discovery-mini">
-      <div class="emoji" style="cursor:pointer" onclick="App.jumpToDiscovery()">\ud83c\udf3f</div>
-      <div style="cursor:pointer" onclick="App.jumpToDiscovery()">
-        <h3>Today\u2019s Discovery</h3>
-        <p>${state.discovery ? state.discovery.text : ''}</p>
-      </div>
-      <button class="shuffle-btn" onclick="App.shuffleDiscovery()" title="Shuffle">${icon('shuffle',15)}</button>
-    </div>
-  `;
-}
-
-function escapeAttr(s){ return (s||'').replace(/"/g,'&quot;'); }
-function escapeHtml(s){ return (s||'').replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
-
-/* ============================================================
-   RENDER: MAIN ROUTER
-   ============================================================ */
-function renderMain(){
-  const main = $('#main');
-  if(state.view==='detail'){ main.innerHTML = detailTemplate(state.speciesId); afterDetailRender(); return; }
-  if(state.view==='notes'){ main.innerHTML = notesTemplate(); return; }
-  if(state.view==='learn'){ main.innerHTML = learnTemplate(); return; }
-  main.innerHTML = collectionTemplate();
-}
-
-/* ---------------- COLLECTION VIEW ---------------- */
-function collectionTemplate(){
-  let list = SPECIES.slice();
-  let title = 'All Species', sub = `${SPECIES.length} insects & birds in the field guide`;
-
-  if(state.categoryFilter){
-    const c = catInfo(state.categoryFilter);
-    list = list.filter(s=>s.category===state.categoryFilter);
-    title = c ? c.label : title; sub = `${list.length} species in this group`;
+    <svg viewBox="0 0 200 170" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M52 128 C60 96 84 74 116 66 C132 62 148 64 158 72"/>
+      <path d="M158 72 L176 78 L159 84"/>
+      <path d="M158 72 C160 88 152 104 134 116 C112 130 82 134 52 128 Z"/>
+      <circle cx="150" cy="76" r="2.4" fill="currentColor" stroke="none"/>
+      <path d="M84 84 C100 82 116 88 126 100 C112 104 96 102 84 96 Z" opacity=".65"/>
+      <path d="M52 128 L22 142 M58 130 L34 150" opacity=".8"/>
+      <path d="M98 130 L96 148 M110 128 L110 148"/>
+      <path d="M88 148 H124" stroke-dasharray="3 4"/>
+      <path d="M64 60 L136 60 M64 54 L136 54" opacity=".25"/>
+    </svg>`;
   }
-  if(state.classFilter){ list = list.filter(s=>s.class===state.classFilter); title = state.classFilter; }
-  if(state.habitatFilter){ list = list.filter(s=>s.habitat===state.habitatFilter); title = state.habitatFilter; sub=`${list.length} species sharing this habitat`; }
-  if(state.query){
-    const q = state.query.toLowerCase();
-    list = list.filter(s=> s.name.toLowerCase().includes(q) || s.sci.toLowerCase().includes(q) || s.family.toLowerCase().includes(q) || s.tags.join(' ').toLowerCase().includes(q));
-    title = `Results for \u201c${state.query}\u201d`; sub = `${list.length} match${list.length===1?'':'es'}`;
-  }
-  if(state.sort==='az') list.sort((a,b)=>a.name.localeCompare(b.name));
-  else if(state.sort==='category') list.sort((a,b)=> a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
-  else list.sort((a,b)=>a.guideNo-b.guideNo);
-
-  const habitats = Array.from(new Set(SPECIES.map(s=>s.habitat)));
-
   return `
-    <div class="collection-view">
-      <div class="collection-head">
-        <div>
-          <h1>${title}</h1>
-          <p>${sub}</p>
-        </div>
-        <div class="collection-controls">
-          <select class="select-input" onchange="location.hash = this.value ? '#/collection/class/'+this.value : '#/collection'">
-            <option value="">All classes</option>
-            <option value="Insects" ${state.classFilter==='Insects'?'selected':''}>Insects</option>
-            <option value="Birds" ${state.classFilter==='Birds'?'selected':''}>Birds</option>
-          </select>
-          <select class="select-input" onchange="App.cycleSortTo && null">
-            <option>Sorted by: ${state.sort==='guide'?'Guide No.':state.sort==='az'?'A\u2013Z':'Category'}</option>
-          </select>
-          ${ (state.categoryFilter||state.classFilter||state.habitatFilter||state.query) ? `<button class="select-input" onclick="App.clearFilters()">Clear filters</button>` : '' }
-        </div>
-      </div>
-      ${ state.habitatMode ? `<div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:18px;">
-          ${habitats.map(h=>`<button class="select-input" style="border-radius:20px;font-size:12px;${state.habitatFilter===h?'background:var(--sage-bg);border-color:#cfe0bd;':''}" onclick="App.setHabitatFilter('${escapeAttr(h)}')">${h}</button>`).join('')}
-        </div>` : '' }
-      ${ list.length ? `<div class="grid">${list.map(gCard).join('')}</div>` : emptyState() }
-    </div>
-  `;
+    <svg viewBox="0 0 200 170" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <ellipse cx="100" cy="88" rx="7" ry="34"/>
+      <circle cx="100" cy="46" r="8"/>
+      <path d="M95 40 C86 26 76 22 68 20 M105 40 C114 26 124 22 132 20"/>
+      <path d="M94 66 C64 40 34 42 30 70 C27 92 52 104 92 92 Z"/>
+      <path d="M106 66 C136 40 166 42 170 70 C173 92 148 104 108 92 Z"/>
+      <path d="M93 96 C72 108 62 126 74 134 C86 141 96 126 98 112 Z"/>
+      <path d="M107 96 C128 108 138 126 126 134 C114 141 104 126 102 112 Z"/>
+      <path d="M42 66 C56 62 74 68 88 82 M158 66 C144 62 126 68 112 82" opacity=".45"/>
+      <path d="M40 150 H160" stroke-dasharray="3 5" opacity=".5"/>
+    </svg>`;
 }
 
-function emptyState(){
-  return `<div class="empty-state">
-    ${icon('search',30)}
-    <h3 style="margin-top:10px;">No matches here</h3>
-    <p>Try a different search term or clear your filters.</p>
-  </div>`;
-}
+/* -------------------------------------------------------------------------- */
+/*  3D stage builders                                                          */
+/* -------------------------------------------------------------------------- */
 
-function gCard(s){
-  const inCompare = state.compare.includes(s.id);
-  const imgBlock = s.verified && s.img
-    ? `<img src="${s.img}" alt="${s.name}" loading="lazy" onerror="this.parentElement.innerHTML=phInner('${s.category}','${escapeAttr(s.name[0])}')">`
-    : phInner(s.category, s.name[0]);
-  return `
-  <div class="g-card" onclick="App.selectSpecies('${s.id}')">
-    <div class="g-card-img">${imgBlock}</div>
-    <div class="g-card-body">
-      <h3>${s.name}</h3>
-      <div class="sci">${s.sci}</div>
-      <div class="g-card-foot">
-        <span class="g-card-cat">${catInfo(s.category).label}</span>
-        <button class="compare-add-btn ${inCompare?'on':''}" title="Add to compare" onclick="App.toggleCompare('${s.id}', event)">${icon(inCompare?'check':'plus',13)}</button>
-      </div>
-    </div>
-  </div>`;
-}
-function phInner(catKey, initial){
-  return `<div class="g-card-ph" style="background:${phGradient(catKey)}">${initial}</div>`;
-}
-window.phInner = phInner; // used in inline onerror string above
+const sketchfabURL = (uid) =>
+  `https://sketchfab.com/models/${uid}/embed?autostart=1&autospin=0.15&ui_infos=0&ui_stop=0&camera=0&dnt=1`;
 
-/* ---------------- LEARN VIEW ---------------- */
-function learnTemplate(){
-  const cards = [
-    { t:'What is pollination?', i:'leaf', c:'Pollination is the transfer of pollen from a flower\u2019s male anther to its female stigma, letting a plant produce seeds and fruit. Roughly 75% of flowering plant species rely on animals \u2014 mostly insects \u2014 to do this transfer for them.' },
-    { t:'Complete vs. incomplete metamorphosis', i:'info', c:'Beetles, moths, butterflies, wasps, ants and bees all go through complete metamorphosis: egg \u2192 larva \u2192 pupa \u2192 adult, four totally different body forms. Dragonflies instead go through incomplete metamorphosis, hatching as nymphs that gradually grow adult features across several molts with no pupal stage.' },
-    { t:'Why insects migrate', i:'explore', c:'Unlike bird migration, many insect migrations \u2014 like the monarch butterfly\u2019s \u2014 span several generations. No single monarch completes the round trip; it takes four or five successive generations to finish one annual migratory cycle.' },
-    { t:'Structural color vs. pigment', i:'cube', c:'Many of the most vivid colors in this guide, from a blue morpho\u2019s wings to a jewel beetle\u2019s shell, aren\u2019t pigment at all. Microscopic ridges and layers in the surface bend light at specific wavelengths, a phenomenon called structural color \u2014 which is why these colors can look different depending on the viewing angle.' },
-    { t:'Ecological roles, in short', i:'map', c:'Species in this guide fill a handful of recurring ecological roles: pollinators move genetic material between plants; predators and parasitoids regulate the populations of other insects; decomposers like dung beetles and stag beetle larvae recycle nutrients back into soil; and apex predators like eagles and owls keep prey populations in balance.' },
-    { t:'Why so many species are declining', i:'habitat', c:'Habitat loss, pesticide use and climate-driven shifts in bloom and migration timing are the three most consistently cited pressures on pollinator and songbird populations worldwide. Field guides like this one exist partly to build the kind of species-level familiarity that makes those declines legible in the first place.' },
-  ];
-  return `
-    <div class="learn-view">
-      <h1>Field Notes</h1>
-      <p class="lede">Short, practical background for reading the rest of this guide.</p>
-      ${cards.map(c=>`<div class="learn-card"><h3>${icon(c.i,17)} ${c.t}</h3><p>${c.c}</p></div>`).join('')}
-    </div>`;
-}
+const sketchfabPage = (uid) => `https://sketchfab.com/models/${uid}`;
 
-/* ---------------- NOTES VIEW ---------------- */
-function notesTemplate(){
-  const all = Store.getNotes();
-  const ids = Object.keys(all);
-  if(!ids.length){
-    return `<div class="notes-view"><h1>Your Notebook</h1>${emptyState()}</div>`;
-  }
-  let rows = '';
-  ids.forEach(id=>{
-    const sp = byId(id); if(!sp) return;
-    all[id].forEach((n,idx)=>{
-      rows += `<div class="note-item" onclick="App.selectSpecies('${id}')">
-        <h4>${sp.name} <span style="color:var(--ink-faint);font-weight:400;">\u00b7 ${new Date(n.date).toLocaleDateString()}</span></h4>
-        <p>${escapeHtml(n.text)}</p>
-      </div>`;
+/* Google's <model-viewer> is loaded on demand, only when a glb() entry exists. */
+let mvPromise = null;
+function ensureModelViewer() {
+  if (!mvPromise) {
+    mvPromise = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.type = "module";
+      s.src = "https://cdn.jsdelivr.net/npm/@google/model-viewer@3/dist/model-viewer.min.js";
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
     });
-  });
-  return `<div class="notes-view"><h1>Your Notebook</h1>${rows}</div>`;
+  }
+  return mvPromise;
 }
 
-/* ---------------- DETAIL VIEW ---------------- */
-function detailTemplate(id){
-  const sp = byId(id);
-  if(!sp){ return collectionTemplate(); }
-  const showingModel = state.show3D && sp.model;
+function stageHTML(s, { mini = false } = {}) {
+  const m = s.model;
+  if (m && m.type === "sketchfab") {
+    return `<iframe title="3D model — ${esc(s.common)}" src="${sketchfabURL(m.uid)}"
+      allow="autoplay; fullscreen; xr-spatial-tracking" allowfullscreen loading="lazy"></iframe>`;
+  }
+  if (m && m.type === "glb") {
+    ensureModelViewer().catch(() => toast("Could not load the 3D viewer library"));
+    return `<model-viewer src="${esc(m.src)}" camera-controls auto-rotate
+      shadow-intensity="0.8" exposure="1" loading="lazy"
+      aria-label="3D model — ${esc(s.common)}"></model-viewer>`;
+  }
+  if (mini) return `<div class="mini-plate">${plateSVG(s.class)}</div>`;
+  const findURL = `https://sketchfab.com/search?type=models&q=${encodeURIComponent(s.latin)}`;
   return `
-    <div class="topbar">
-      <button class="back-link" onclick="App.backToCollection()"><span style="display:inline-flex;transform:scaleX(-1);">${icon('chevron',16)}</span> Back to Collection</button>
-      <div class="name-tag">
-        <span class="pin">${icon('pin',20)}</span>
-        <h2>${sp.name}</h2>
-        <p>${sp.sci}</p>
+    <div class="plate">
+      ${plateSVG(s.class)}
+      <div class="plate-caption">Plate ${pad3(s.no)} · No verified 3D specimen on file</div>
+      <a class="btn small" href="${findURL}" target="_blank" rel="noopener">Find a 3D model ↗</a>
+      <div class="micro" style="color:var(--ink-soft); letter-spacing:.1em">
+        found one? drop its UID into data.js — one line
       </div>
-      <div class="topbar-actions">
-        <button class="action-btn" onclick="App.openNotebook()">${icon('notebook',18)}<span class="lbl">Notebook</span></button>
-        <button class="action-btn ${state.compare.includes(sp.id)?'active':''}" onclick="App.toggleCompare('${sp.id}')">${icon('compare',18)}<span class="lbl">Compare</span></button>
-        <button class="action-btn" onclick="App.share()">${icon('share',18)}<span class="lbl">Share</span></button>
-        <div class="action-divider"></div>
-        <button class="action-btn" id="moreBtn" onclick="App.toggleMore()">${icon('more',18)}<span class="lbl">More</span></button>
-        <button class="action-btn info-toggle-mobile" onclick="App.toggleDetailMobile(true)">${icon('info',18)}<span class="lbl">Info</span></button>
-      </div>
-    </div>
-
-    <div class="viewer">
-      <div class="viewer-stage">
-        ${showingModel ? modelEmbedHtml(sp) : `<div class="viewer-img-wrap" id="viewerImgWrap">${photoOrPlaceholderHtml(sp)}</div>`}
-        <div class="viewer-side">${sideButtonsHtml(sp)}</div>
-      </div>
-    </div>
-    ${showingModel ? `
-    <div class="viewer-bottom">
-      <span class="viewer-mode-pill">${icon('cube',13)} Real 3D model \u2014 drag to orbit</span>
-      <button class="round-btn" onclick="App.toggleCube()" title="Back to photo">${icon('close',15)}</button>
-    </div>` : `
-    <div class="viewer-bottom">
-      <button class="round-btn" onclick="App.rotateReset()" title="Reset">${icon('reset',16)}</button>
-      <span class="deg-pill" id="degPill">${state.rotate}\u00b0</span>
-      <input type="range" min="-180" max="180" value="${state.rotate}" class="rotate-slider" id="rotateSlider" oninput="App.rotateFromSlider(this.value)">
-      <button class="round-btn" onclick="App.openFullscreen()" title="Fullscreen">${icon('fullscreen',15)}</button>
-    </div>`}
-    <div class="quote-strip"><span class="qtext">\u201c${state.quote}\u201d</span><button onclick="App.shuffleQuote()" title="New quote">${icon('shuffle',13)}</button></div>
-  `;
+    </div>`;
 }
 
-function photoOrPlaceholderHtml(sp){
-  return sp.verified && sp.img
-    ? `<img class="viewer-img" id="viewerImg" src="${sp.img}" alt="${sp.name}" onerror="renderPlaceholderInViewer()">`
-    : placeholderArtHtml(sp);
-}
-
-function modelEmbedHtml(sp){
-  const m = sp.model;
-  if(m && m.type === 'sketchfab'){
-    return `<div class="model-embed-wrap">
-      <span class="model-badge">${icon('cube',12)} Sketchfab 3D model</span>
-      <iframe title="${sp.name} 3D model" src="https://sketchfab.com/models/${m.id}/embed?autostart=1&transparent=1&ui_theme=dark"
-        allow="autoplay; fullscreen; xr-spatial-tracking" xr-spatial-tracking></iframe>
+function attributionHTML(s) {
+  const m = s.model;
+  if (!m) {
+    return `<div class="attribution"><span>3D RECORD — pending · illustrated plate shown</span></div>`;
+  }
+  if (m.type === "sketchfab") {
+    return `<div class="attribution">
+      <span>3D MODEL — ${esc(m.author)} · license: ${esc(m.license)} · via Sketchfab</span>
+      <a href="${sketchfabPage(m.uid)}" target="_blank" rel="noopener">model source ↗</a>
     </div>`;
   }
-  if(m && m.type === 'glb'){
-    return `<div class="model-embed-wrap">
-      <span class="model-badge">${icon('cube',12)} 3D model</span>
-      <model-viewer src="${m.url}" camera-controls auto-rotate shadow-intensity="1" alt="${sp.name} 3D model"></model-viewer>
+  return `<div class="attribution">
+    <span>3D MODEL — ${esc(m.author)} · ${esc(m.license || "self-hosted glTF")}</span>
+    <a href="${esc(m.src)}" target="_blank" rel="noopener">file ↗</a>
+  </div>`;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  sidebar                                                                    */
+/* -------------------------------------------------------------------------- */
+
+function renderSidebar() {
+  const nav = $("#nav");
+  const list = sortedFiltered();
+  const visible = new Set(list.map((s) => s.id));
+  const route = currentRoute();
+
+  const viewLink = (hash, label, key) =>
+    `<a href="${hash}" class="${route.name === key ? "active" : ""}">${label}</a>`;
+
+  let html = `<div class="nav-views">
+    ${viewLink("#/", "Index", "home")}
+    ${viewLink("#/notebook", "Notebook", "notebook")}
+    ${viewLink("#/compare", `Compare${state.compare.length ? ` · ${state.compare.length}` : ""}`, "compare")}
+  </div>`;
+
+  if (!list.length) {
+    html += `<div class="nav-empty">No specimens match “${esc(state.query)}”.<br>Try a family, a tag, or a Latin name.</div>`;
+  }
+
+  for (const cls of CLASSES) {
+    const inClass = list.filter((s) => s.class === cls);
+    if (!inClass.length) continue;
+    const total = SPECIES.filter((s) => s.class === cls).length;
+    html += `<div class="class-group">
+      <div class="class-head">
+        <span class="name">${esc(cls)}</span>
+        <span class="rule"></span>
+        <span class="count">${inClass.length}/${total}</span>
+      </div>`;
+
+    const families = [...new Set(inClass.map((s) => s.family))].sort();
+    for (const fam of families) {
+      html += `<span class="family-head">${esc(fam)}</span>`;
+      for (const s of inClass.filter((x) => x.family === fam)) {
+        const active = route.name === "species" && route.id === s.id;
+        const inCmp = state.compare.includes(s.id);
+        html += `
+        <div class="species-row ${active ? "active" : ""}" data-go="#/species/${s.id}" role="link" tabindex="0">
+          <span class="idx">${pad3(s.no)}</span>
+          <span class="swap">
+            <span class="common">${esc(s.common)}</span>
+            <span class="latin">${esc(s.latin)}</span>
+          </span>
+          <button class="cmp-toggle ${inCmp ? "in" : ""}" data-compare="${s.id}"
+            title="${inCmp ? "Remove from" : "Add to"} comparison" aria-pressed="${inCmp}">
+            ${inCmp ? "−" : "+"}
+          </button>
+        </div>`;
+      }
+    }
+    html += `</div>`;
+  }
+
+  nav.innerHTML = html;
+  $("#matchCount").textContent =
+    state.query || state.sort !== "catalog"
+      ? `${list.length} of ${SPECIES.length} specimens`
+      : `${SPECIES.length} specimens on file`;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  views                                                                      */
+/* -------------------------------------------------------------------------- */
+
+function viewHome() {
+  const families = new Set(SPECIES.map((s) => s.family)).size;
+  const withModels = SPECIES.filter((s) => s.model).length;
+  const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 864e5);
+  const spot = { ...SPECIES[dayOfYear % SPECIES.length] };
+  spot.no = SPECIES.indexOf(SPECIES.find((x) => x.id === spot.id)) + 1;
+
+  return `
+  <section class="home-hero">
+    <span class="micro">${esc(GUIDE_META.volume)} · compiled ${esc(GUIDE_META.compiled)}</span>
+    <h1>A working cabinet of <em>insects</em> &amp; <em>birds</em>.</h1>
+    <p class="lede">
+      Every specimen in this drawer carries a real, orbit-able 3D model — drag it, turn it,
+      get closer than the glass ever lets you. Species without a verified model keep an
+      illustrated plate until one is found.
+    </p>
+  </section>
+
+  <div class="stat-row">
+    <div class="stat"><div class="n">${SPECIES.length}</div><div class="l">species on file</div></div>
+    <div class="stat"><div class="n">${families}</div><div class="l">families</div></div>
+    <div class="stat"><div class="n">${withModels}</div><div class="l">3D specimens</div></div>
+  </div>
+
+  <div class="how">
+    <h2>How to work the cabinet</h2>
+    <ol>
+      <li><span><b>Browse the index.</b> The sidebar files species by class and family. Search by name, family or tag; sort with the dropdown. Press <b>/</b> to jump to search.</span></li>
+      <li><span><b>Orbit the specimen.</b> On a species page, drag to rotate the 3D model, scroll to zoom. No model yet? The plate links straight to a search for one.</span></li>
+      <li><span><b>Keep field notes.</b> Each species page has a notes card; everything is saved to this browser automatically and gathered under <b>Notebook</b>.</span></li>
+      <li><span><b>Compare up to four.</b> Tap <b>+</b> beside any species to load the comparison tray, then open <b>Compare</b> for a side-by-side ledger — 3D included.</span></li>
+    </ol>
+  </div>
+
+  <a class="spotlight" href="#/species/${spot.id}">
+    <div>
+      <span class="micro">Specimen of the day · № ${pad3(spot.no)}</span>
+      <div class="name">${esc(spot.common)}</div>
+      <div class="latin">${esc(spot.latin)}</div>
+    </div>
+    <span class="go">OPEN FILE →</span>
+  </a>`;
+}
+
+function viewSpecies(id) {
+  const s = BY_ID[id];
+  if (!s) {
+    return `<div class="empty-state"><div class="glyph">?</div>
+      <p>№ “${esc(id)}” is not in this cabinet.</p>
+      <a class="btn small" href="#/" style="margin-top:14px">Back to the index</a></div>`;
+  }
+  const i = SPECIES.findIndex((x) => x.id === id);
+  const prev = SPECIES[(i - 1 + SPECIES.length) % SPECIES.length];
+  const next = SPECIES[(i + 1) % SPECIES.length];
+  const note = state.notes[id]?.text || "";
+  const inCmp = state.compare.includes(id);
+  const has3D = !!s.model;
+
+  return `
+  <div class="crumb micro">
+    <span class="idx-no">№ ${pad3(s.no)}</span><span class="sep">/</span>
+    <span>${esc(s.class)}</span><span class="sep">/</span>
+    <span>${esc(s.order)}</span><span class="sep">/</span>
+    <span>${esc(s.family)}</span>
+  </div>
+
+  <header class="species-head">
+    <h1>${esc(s.common)}</h1>
+    <div class="latin">${esc(s.latin)}</div>
+    <div class="head-actions">
+      <button class="btn ${inCmp ? "solid" : ""}" data-compare="${s.id}">
+        ${inCmp ? "✓ In comparison" : "+ Compare"}
+      </button>
+      <a class="btn" href="#/notebook">Notebook</a>
+    </div>
+  </header>
+
+  <div class="stage-wrap">
+    <div class="stage">
+      <span class="stage-label">${has3D ? `FIG. ${pad3(s.no)} — ORBIT VIEW` : `PLATE ${pad3(s.no)} — ILLUSTRATION`}</span>
+      ${stageHTML(s)}
+      ${has3D ? `<span class="stage-hint">drag to orbit · scroll to zoom</span>` : ""}
+    </div>
+    ${attributionHTML(s)}
+  </div>
+
+  <p class="blurb">${esc(s.blurb)}</p>
+
+  <dl class="ledger">
+    <div class="ledger-row"><dt>Family</dt><dd>${esc(s.family)} · <em>${esc(s.order)}</em></dd></div>
+    <div class="ledger-row"><dt>Range</dt><dd>${esc(s.range)}</dd></div>
+    <div class="ledger-row"><dt>Diet</dt><dd>${esc(s.diet)}</dd></div>
+    <div class="ledger-row"><dt>Ecological role</dt><dd>${esc(s.role)}</dd></div>
+    <div class="ledger-row"><dt>Field marks</dt>
+      <dd><span class="tagset">
+        <span class="tag class-chip">${esc(s.class)}</span>
+        ${s.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}
+      </span></dd>
+    </div>
+  </dl>
+
+  <div class="notes-card">
+    <div class="notes-head">
+      <span class="micro">Field notes — ${esc(s.common)}</span>
+      <span class="notes-status" id="noteStatus"></span>
+    </div>
+    <textarea id="noteArea" placeholder="Date, location, behaviour, weather…" spellcheck="false">${esc(note)}</textarea>
+  </div>
+
+  <nav class="pager">
+    <a href="#/species/${prev.id}">← ${pad3(SPECIES.indexOf(prev) + 1)} · ${esc(prev.common)}</a>
+    <a href="#/species/${next.id}">${pad3(SPECIES.indexOf(next) + 1)} · ${esc(next.common)} →</a>
+  </nav>`;
+}
+
+function fmtWhen(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) +
+    " · " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+function viewNotebook() {
+  const entries = Object.entries(state.notes)
+    .filter(([, n]) => n.text && n.text.trim())
+    .sort((a, b) => b[1].updated - a[1].updated);
+
+  let body;
+  if (!entries.length) {
+    body = `<div class="empty-state">
+      <div class="glyph">✎</div>
+      <p>No field notes yet.<br>Open any species and start writing — notes save automatically in this browser.</p>
+      <a class="btn small" href="#/" style="margin-top:16px">Browse the index</a>
+    </div>`;
+  } else {
+    body = entries.map(([id, n]) => {
+      const s = BY_ID[id];
+      if (!s) return "";
+      return `<article class="note-entry">
+        <div class="note-head">
+          <span class="idx">№ ${pad3(s.no)}</span>
+          <a href="#/species/${s.id}">${esc(s.common)}</a>
+          <span class="when">${fmtWhen(n.updated)}</span>
+          <button class="del" data-delnote="${esc(id)}">DELETE</button>
+        </div>
+        <div class="note-body">${esc(n.text)}</div>
+      </article>`;
+    }).join("");
+  }
+
+  return `
+  <div class="view-head">
+    <h1>Field notebook</h1>
+    <div class="actions">
+      ${entries.length ? `<button class="btn small" data-action="export-notes">Export .md</button>` : ""}
+      ${entries.length ? `<button class="btn small danger" data-action="clear-notes">Clear all</button>` : ""}
+    </div>
+  </div>
+  ${body}`;
+}
+
+function viewCompare() {
+  const sel = state.compare.map((id) => BY_ID[id]).filter(Boolean);
+
+  const picker = `<div class="cmp-picker">
+    ${SPECIES.map((s, i) => {
+      const inCmp = state.compare.includes(s.id);
+      return `<button class="cmp-chip ${inCmp ? "in" : ""}" data-compare="${s.id}">
+        ${pad3(i + 1)} ${esc(s.common)}</button>`;
+    }).join("")}
+  </div>
+  <div class="cmp-hint">SELECT 2–4 SPECIMENS FOR THE LEDGER · ${sel.length}/${MAX_COMPARE} LOADED</div>`;
+
+  if (sel.length < 2) {
+    return `
+    <div class="view-head"><h1>Comparison tray</h1></div>
+    ${picker}
+    <div class="empty-state">
+      <div class="glyph">⧉</div>
+      <p>${sel.length === 0
+        ? "The tray is empty. Pick at least two specimens above, or tap + beside any species in the index."
+        : "One specimen loaded — add at least one more to open the ledger."}</p>
     </div>`;
   }
-  return `<div class="viewer-img-wrap" id="viewerImgWrap">${photoOrPlaceholderHtml(sp)}</div>`;
-}
 
-function sideButtonsHtml(sp){
-  const hasModel = !!(sp && sp.model);
+  const rows = [
+    ["Class", (s) => esc(s.class)],
+    ["Order", (s) => esc(s.order)],
+    ["Family", (s) => esc(s.family)],
+    ["Range", (s) => esc(s.range)],
+    ["Diet", (s) => esc(s.diet)],
+    ["Ecological role", (s) => esc(s.role)],
+    ["Field marks", (s) => `<span class="tagset">${s.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</span>`],
+    ["3D record", (s) => s.model
+      ? `${esc(s.model.author)} · <a class="cell-link" href="${s.model.type === "sketchfab" ? sketchfabPage(s.model.uid) : esc(s.model.src)}" target="_blank" rel="noopener">source ↗</a>`
+      : "pending — plate on file"],
+    ["File", (s) => `<a class="cell-link" href="#/species/${s.id}">open № ${pad3(s.no)} →</a>`],
+  ];
+
   return `
-    <button class="side-btn ${(state.show3D&&hasModel)||state.autoRotateTimer?'active':''}" onclick="App.toggleCube()" title="${hasModel?'Toggle real 3D model':'Auto-rotate (no 3D model linked \u2014 see More menu)'}">${icon('cube',18)}<span>3D</span></button>
-    <button class="side-btn ${state.zoomIdx!==1?'active':''}" onclick="App.cycleZoom()">${icon('ruler',18)}<span>Size</span></button>
-    <button class="side-btn ${state.scopeOn?'active':''}" onclick="App.toggleScope()">${icon('crosshair',18)}<span>Scope</span></button>
-    <button class="side-btn" onclick="App.openAR()">${icon('camera',18)}<span>AR View</span></button>
-  `;
-}
-
-function placeholderArtHtml(sp){
-  const cat = catInfo(sp.category);
-  return `<div class="placeholder-art viewer-img" id="viewerImg" style="background:${phGradient(sp.category)}">
-      <span class="ph-icon">${icon(cat.icon,44)}</span>
-      <span class="ph-initial">${sp.name[0]}</span>
-      <span class="ph-label">Illustrated placeholder</span>
-    </div>
-    <div class="placeholder-note">${icon('info',13)} No verified photo yet \u2014 <a href="${commonsSearchUrl(sp.commonsQuery)}" target="_blank" rel="noopener">find one on Wikimedia Commons</a></div>`;
-}
-window.renderPlaceholderInViewer = function(){
-  const sp = byId(state.speciesId); if(!sp) return;
-  const wrap = $('#viewerImgWrap'); if(!wrap) return;
-  wrap.innerHTML = placeholderArtHtml(sp);
-};
-
-function afterDetailRender(){
-  renderDetailPanel();
-  applyViewerTransform();
-  renderCompareTray();
-  attachDragRotate();
-  attachScopeMagnifier();
-}
-
-function renderSideButtons(){
-  const sp = byId(state.speciesId); if(!sp) return;
-  const wrap = $('.viewer-side'); if(!wrap) return;
-  wrap.innerHTML = sideButtonsHtml(sp);
-}
-
-/* ---------------- DETAIL PANEL (right column) ---------------- */
-function renderDetailPanel(){
-  const panel = $('#detailPanel');
-  const sp = byId(state.speciesId);
-  if(!sp){ panel.innerHTML=''; return; }
-  const rows = [
-    ['info','Species Details', sp.details],
-    ['leaf','Behavior & Traits', sp.traits],
-    ['bee','Diet', sp.diet],
-    ['map','Range', sp.range],
-    ['explore','Ecological Role', sp.role],
-  ];
-  panel.innerHTML = `
-    <button class="detail-close-mobile" style="position:absolute;top:14px;right:14px;" onclick="App.toggleDetailMobile(false)" aria-label="Close details">${icon('close',16)}</button>
-    <div class="detail-top">
-      <span class="family-badge" style="${badgeStyle(sp.family)}">${sp.family}</span>
-      <div class="fieldguide-note">
-        <div class="fg-label">Field Guide</div>
-        <div class="fg-no">No. ${String(sp.guideNo).padStart(2,'0')}</div>
-      </div>
-    </div>
-    <h2 class="detail-name">${sp.name}</h2>
-    <div class="detail-sci">${sp.sci}</div>
-    <div class="detail-tags">${sp.tags.map(t=>`<span class="tag-chip" style="${chipStyle(t)}">${t}</span>`).join('')}</div>
-    <div class="detail-divider"></div>
-    <div class="info-rows">
-      ${rows.map(([ic,label,text])=>`
-        <div class="info-row">
-          <span class="info-icon" style="${badgeStyle(label)}">${icon(ic,15)}</span>
-          <div><h4>${label}</h4><p>${text}</p></div>
-        </div>`).join('')}
-    </div>
-    <div class="habitat-card">
-      <div class="hc-label">${icon('habitat',13)} Habitat</div>
-      <div class="habitat-visual" style="background:${phGradient(sp.category)}">${sp.habitat}</div>
-    </div>
-    <div class="notebook-btn-row">
-      <button class="notebook-open-btn" onclick="App.openNotebook()">${icon('notebook',15)} Open field notebook</button>
-    </div>
-  `;
-}
-
-/* ---------------- NOTEBOOK DRAWER ---------------- */
-function renderNotebookDrawer(){
-  const sp = byId(state.speciesId);
-  const drawer = $('#notebookDrawer');
-  if(!sp){ drawer.innerHTML = `<div class="drawer-head"><h2>Notebook</h2><button onclick="App.closeNotebook()">${icon('close',18)}</button></div><p style="color:var(--ink-soft);font-size:13px;">Open a species first to take notes on it.</p>`; return; }
-  const notes = (Store.getNotes()[sp.id]) || [];
-  drawer.innerHTML = `
-    <div class="drawer-head"><h2>Notes \u2014 ${sp.name}</h2><button onclick="App.closeNotebook()">${icon('close',18)}</button></div>
-    <textarea id="notebookText" placeholder="Field notes, sightings, questions\u2026"></textarea>
-    <button class="drawer-save" onclick="App.saveNote()">Save note</button>
-    <div class="saved-hint" id="savedHint"></div>
-    <div style="margin-top:18px;display:flex;flex-direction:column;gap:8px;">
-      ${notes.map((n,idx)=>`
-        <div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:10px;padding:10px 12px;position:relative;">
-          <p style="font-size:12.5px;white-space:pre-wrap;padding-right:20px;">${escapeHtml(n.text)}</p>
-          <div style="font-size:10.5px;color:var(--ink-faint);margin-top:5px;">${new Date(n.date).toLocaleString()}</div>
-          <button onclick="App.deleteNote(${idx})" style="position:absolute;top:8px;right:8px;color:var(--ink-faint);">${icon('close',13)}</button>
-        </div>`).join('') || `<p style="font-size:12px;color:var(--ink-faint);">No notes yet for this species.</p>`}
-    </div>
-  `;
-}
-
-/* ---------------- COMPARE ---------------- */
-function renderCompareTray(){
-  const tray = $('#compareTray');
-  if(!state.compare.length){ tray.classList.add('hide'); return; }
-  tray.classList.remove('hide');
-  tray.innerHTML = `
-    ${state.compare.map(id=>{
-      const sp = byId(id); if(!sp) return '';
-      return `<div class="ct-thumb">${sp.verified&&sp.img?`<img src="${sp.img}" onerror="this.remove()">`:sp.name[0]}</div>`;
-    }).join('')}
-    <span style="font-size:12px;">${state.compare.length} selected</span>
-    <button class="compare-tray-btn" onclick="App.openCompare()">Compare</button>
-  `;
-}
-function renderCompareModal(){
-  const wrap = $('#compareModalWrap');
-  const list = state.compare.map(byId).filter(Boolean);
-  if(!list.length){ wrap.classList.remove('show'); return; }
-  const rows = [
-    ['Family', s=>s.family],
-    ['Habitat', s=>s.habitat],
-    ['Diet', s=>s.diet],
-    ['Range', s=>s.range],
-    ['Ecological Role', s=>s.role],
-  ];
-  $('#compareModal').innerHTML = `
-    <div class="compare-modal-head">
-      <h2 style="font-size:18px;">Compare Species</h2>
-      <button onclick="App.closeCompare()">${icon('close',20)}</button>
-    </div>
-    <div style="overflow-x:auto;">
-    <table class="compare-table">
-      <thead><tr><th></th>${list.map(s=>`<th>${s.name}<button class="compare-remove" onclick="App.removeCompare('${s.id}')" style="margin-left:8px;">${icon('close',12)}</button></th>`).join('')}</tr></thead>
+  <div class="view-head"><h1>Comparison tray</h1></div>
+  ${picker}
+  <div class="cmp-scroll">
+    <table class="compare">
+      <thead><tr>
+        <th class="row-label">Ledger</th>
+        ${sel.map((s) => `
+        <th class="col-head">
+          <div class="mini-stage">
+            <button class="col-x" data-compare="${s.id}" title="Remove">×</button>
+            ${stageHTML(s, { mini: true })}
+          </div>
+          <div class="col-name">${esc(s.common)}</div>
+          <div class="col-latin">${esc(s.latin)}</div>
+        </th>`).join("")}
+      </tr></thead>
       <tbody>
-        ${rows.map(([label,fn])=>`<tr><td class="row-label">${label}</td>${list.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`).join('')}
+        ${rows.map(([label, fn]) => `
+        <tr>
+          <th class="row-label">${label}</th>
+          ${sel.map((s) => `<td>${fn(s)}</td>`).join("")}
+        </tr>`).join("")}
       </tbody>
     </table>
-    </div>
-  `;
+  </div>`;
 }
 
-/* ============================================================
-   SHELL / STATIC CHROME (sidebar overlay state, etc.)
-   ============================================================ */
-function renderShellChrome(){
-  $('#sidebar').classList.toggle('show', state.sidebarOpen);
-  $('#sidebarOverlay').classList.toggle('show', state.sidebarOpen);
-  $('#detailPanel').classList.toggle('show', state.detailOpenMobile);
+/* -------------------------------------------------------------------------- */
+/*  notes + compare actions                                                    */
+/* -------------------------------------------------------------------------- */
+
+function saveNote(id, text, statusEl) {
+  if (statusEl) statusEl.textContent = "saving…";
+  clearTimeout(saveNote._t);
+  saveNote._t = setTimeout(() => {
+    if (text.trim()) state.notes[id] = { text, updated: Date.now() };
+    else delete state.notes[id];
+    store.set("fieldguide.notes.v1", state.notes);
+    if (statusEl) statusEl.textContent = text.trim() ? "— saved" : "";
+  }, 350);
 }
 
-/* ============================================================
-   MASTER RENDER
-   ============================================================ */
-function render(){
-  renderSidebar();
-  renderMain();
-  renderShellChrome();
-  renderCompareTray();
-  closeMoreMenu();
-}
-
-/* ---------- init ---------- */
-document.addEventListener('keydown', e=>{
-  if(e.key !== 'Escape') return;
-  closeAnyMenu();
-  if($('#lightbox').classList.contains('show')) return App.closeLightbox();
-  if($('#arModal').classList.contains('show')) return App.closeAR();
-  if($('#compareModalWrap').classList.contains('show')) return App.closeCompare();
-  if($('#modelInfoWrap').classList.contains('show')) return App.closeModelInfo();
-  if($('#aboutModalWrap').classList.contains('show')) return App.closeAbout();
-  if($('#notebookDrawer').classList.contains('show')) return App.closeNotebook();
-  if(state.detailOpenMobile) return App.toggleDetailMobile(false);
-  if(state.sidebarOpen) return App.toggleSidebar(false);
-});
-
-document.addEventListener('DOMContentLoaded', ()=>{
-  parseRoute();
+function toggleCompare(id) {
+  const at = state.compare.indexOf(id);
+  if (at >= 0) {
+    state.compare.splice(at, 1);
+  } else {
+    if (state.compare.length >= MAX_COMPARE) {
+      toast(`The tray holds ${MAX_COMPARE} specimens — remove one first`);
+      return;
+    }
+    state.compare.push(id);
+    const s = BY_ID[id];
+    toast(`№ ${pad3(s.no)} ${s.common} → comparison tray`);
+  }
+  store.set("fieldguide.compare.v1", state.compare);
   render();
-});
-})();
+}
+
+function exportNotes() {
+  const lines = ["# Field notes — " + GUIDE_META.title + " " + GUIDE_META.volume, ""];
+  Object.entries(state.notes)
+    .filter(([, n]) => n.text && n.text.trim())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .forEach(([id, n]) => {
+      const s = BY_ID[id];
+      if (!s) return;
+      lines.push(`## № ${pad3(s.no)} · ${s.common} (*${s.latin}*)`);
+      lines.push(`_${fmtWhen(n.updated)}_`, "", n.text.trim(), "");
+    });
+  const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "field-notes.md";
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast("Notebook exported as field-notes.md");
+}
+
+/* -------------------------------------------------------------------------- */
+/*  router                                                                     */
+/* -------------------------------------------------------------------------- */
+
+function currentRoute() {
+  const h = location.hash.replace(/^#\/?/, "");
+  if (h.startsWith("species/")) return { name: "species", id: h.slice(8) };
+  if (h === "notebook") return { name: "notebook" };
+  if (h === "compare") return { name: "compare" };
+  return { name: "home" };
+}
+
+function render() {
+  const route = currentRoute();
+  const main = $("#view");
+  if (route.name === "species") main.innerHTML = viewSpecies(route.id);
+  else if (route.name === "notebook") main.innerHTML = viewNotebook();
+  else if (route.name === "compare") main.innerHTML = viewCompare();
+  else main.innerHTML = viewHome();
+
+  const s = route.name === "species" ? BY_ID[route.id] : null;
+  document.title = s
+    ? `${s.common} · ${GUIDE_META.title}`
+    : `${route.name === "home" ? GUIDE_META.title + " — " + GUIDE_META.volume
+        : route.name[0].toUpperCase() + route.name.slice(1)} · ${GUIDE_META.title}`;
+
+  renderSidebar();
+  $("#main").scrollTop = 0;
+  if (window.innerWidth <= 980) closeSidebar();
+}
+
+/* -------------------------------------------------------------------------- */
+/*  events                                                                     */
+/* -------------------------------------------------------------------------- */
+
+function closeSidebar() {
+  $("#sidebar").classList.remove("open");
+  $("#scrim").classList.remove("on");
+}
+
+function bindEvents() {
+  window.addEventListener("hashchange", render);
+
+  $("#search").addEventListener("input", (e) => {
+    state.query = e.target.value;
+    renderSidebar();
+  });
+
+  $("#sort").addEventListener("change", (e) => {
+    state.sort = e.target.value;
+    renderSidebar();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "");
+    if (e.key === "/" && !typing) {
+      e.preventDefault();
+      if (window.innerWidth <= 980) { $("#sidebar").classList.add("open"); $("#scrim").classList.add("on"); }
+      $("#search").focus();
+    }
+    if (e.key === "Escape") {
+      state.query = "";
+      $("#search").value = "";
+      renderSidebar();
+      closeSidebar();
+    }
+  });
+
+  $("#menuToggle").addEventListener("click", () => {
+    const open = $("#sidebar").classList.toggle("open");
+    $("#scrim").classList.toggle("on", open);
+  });
+  $("#scrim").addEventListener("click", closeSidebar);
+
+  /* delegated clicks: navigation rows, compare toggles, note actions */
+  document.addEventListener("click", (e) => {
+    const cmpBtn = e.target.closest("[data-compare]");
+    if (cmpBtn) {
+      e.stopPropagation();
+      toggleCompare(cmpBtn.dataset.compare);
+      return;
+    }
+    const row = e.target.closest("[data-go]");
+    if (row) { location.hash = row.dataset.go; return; }
+
+    const del = e.target.closest("[data-delnote]");
+    if (del) {
+      delete state.notes[del.dataset.delnote];
+      store.set("fieldguide.notes.v1", state.notes);
+      render();
+      toast("Note deleted");
+      return;
+    }
+    const act = e.target.closest("[data-action]");
+    if (act?.dataset.action === "export-notes") exportNotes();
+    if (act?.dataset.action === "clear-notes") {
+      if (confirm("Delete every field note in this browser?")) {
+        state.notes = {};
+        store.set("fieldguide.notes.v1", state.notes);
+        render();
+        toast("Notebook cleared");
+      }
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.target.matches?.("[data-go]")) location.hash = e.target.dataset.go;
+  });
+
+  /* notes textarea autosave (delegate, survives re-renders) */
+  document.addEventListener("input", (e) => {
+    if (e.target.id === "noteArea") {
+      const route = currentRoute();
+      if (route.name === "species") saveNote(route.id, e.target.value, $("#noteStatus"));
+    }
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/*  boot                                                                       */
+/* -------------------------------------------------------------------------- */
+
+bindEvents();
+render();
