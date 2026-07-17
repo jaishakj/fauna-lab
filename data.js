@@ -1,1668 +1,287 @@
-/*=========================================================
- WildGuide 3D
- data.js
- Part 3A
-=========================================================*/
+/* ============================================================================
+   FIELD GUIDE · DATA LAYER  (data.js)
+   ----------------------------------------------------------------------------
+   The entire guide is driven by the SPECIES array below.
 
-/*
-==========================================================
- MODEL TYPES
-==========================================================
-*/
+   ▸ ADD A SPECIES      → copy any { … } block, paste it, edit the fields.
+   ▸ ADD / SWAP A MODEL → edit the ONE  model:  line inside a species block:
 
-const MODEL_TYPES = {
+       model: sketch("SKETCHFAB_UID", "Author Name", "License"),  // 3D embed
+       model: glb("models/my-scan.glb", "Author Name", "License"),// self-hosted
+       model: null,                                               // placeholder
 
-    GLB: "glb",
+     · sketch() → embeds https://sketchfab.com/models/UID/embed  (orbit-ready)
+     · glb()    → renders your own .glb/.gltf via Google's <model-viewer>
+     · null     → shows the illustrated plate + a "find a 3D model" link
 
-    SKETCHFAB: "sketchfab",
+   Nothing else in the app needs to change — sidebar groups, search, sort,
+   notebook and comparison all pick up new entries automatically.
+   ============================================================================ */
 
-    NONE: "none"
-
-};
-
-/*
-==========================================================
- LOCAL STORAGE KEYS
-==========================================================
-*/
-
-const STORAGE = {
-
-    NOTES: "wildguide_notes",
-
-    FAVORITES: "wildguide_favorites",
-
-    COMPARISON: "wildguide_compare"
-
-};
-
-/*
-==========================================================
- APPLICATION SETTINGS
-==========================================================
-*/
-
-const APP = {
-
-    title: "WildGuide 3D",
-
-    version: "1.0.0",
-
-    maxComparison: 4,
-
-    defaultSort: "name"
-
-};
-
-/*
-==========================================================
- DATA SCHEMA
-
-Every species follows this structure.
-
-{
-
-    id,
-
-    commonName,
-
-    scientificName,
-
-    class,
-
-    family,
-
-    habitat,
-
-    range,
-
-    diet,
-
-    ecologicalRole,
-
-    conservation,
-
-    description,
-
-    tags: [],
-
-    keywords: [],
-
-    model:{
-
-        type,
-
-        src,
-
-        poster,
-
-        search
-
-    }
-
-}
-
-==========================================================
-*/
-
-/*
-==========================================================
- MAIN DATABASE
-==========================================================
-*/
+const sketch = (uid, author, license) => ({ type: "sketchfab", uid, author, license });
+const glb    = (src, author, license) => ({ type: "glb", src, author, license });
 
 const SPECIES = [
+  /* ------------------------------ INSECTA ------------------------------- */
+  {
+    id: "monarch-butterfly",
+    common: "Monarch Butterfly",
+    latin: "Danaus plexippus",
+    class: "Insecta",
+    order: "Lepidoptera",
+    family: "Nymphalidae",
+    range: "North & South America; migratory populations overwinter in central Mexico and coastal California. Established also in Australia and Pacific islands.",
+    diet: "Larvae feed exclusively on milkweed (Asclepias); adults take nectar from asters, goldenrod and milkweed blossoms.",
+    role: "Pollinator and aposematic model species — sequesters milkweed cardenolides that make it toxic to predators.",
+    tags: ["pollinator", "migratory", "aposematic", "milkweed"],
+    blurb: "The great migrant of the insect world: four generations a year, one of which flies up to 4,000 km to a forest it has never seen.",
+    model: sketch("3a5fc9a496cb402297ffdb6700d2ab60", "University Libraries at Virginia Tech", "CC BY"),
+  },
+  {
+    id: "western-honey-bee",
+    common: "Western Honey Bee",
+    latin: "Apis mellifera",
+    class: "Insecta",
+    order: "Hymenoptera",
+    family: "Apidae",
+    range: "Native to Europe, western Asia and Africa; introduced worldwide wherever crops are grown.",
+    diet: "Nectar and pollen; surplus nectar is cured into honey that feeds the colony through winter.",
+    role: "Keystone pollinator of crops and wildflowers; eusocial superorganism whose hives anchor human agriculture.",
+    tags: ["pollinator", "eusocial", "domesticated"],
+    blurb: "A single colony can visit 50 million flowers in a summer — this CT scan shows the worker that does the work.",
+    model: sketch("38c955f0c13449969a948bcce107e08a", "etainproject", "CC BY"),
+  },
+  {
+    id: "five-horned-rhinoceros-beetle",
+    common: "Five-horned Rhinoceros Beetle",
+    latin: "Eupatorus gracilicornis",
+    class: "Insecta",
+    order: "Coleoptera",
+    family: "Scarabaeidae",
+    range: "Montane forests of northeast India, southern China, Myanmar, Thailand, Laos and Vietnam.",
+    diet: "Adults sip tree sap and fermenting fruit; larvae develop for 1–2 years in rotting wood and leaf litter.",
+    role: "Decomposer — its grubs recycle dead hardwood; males wrestle with five horns for mating rights.",
+    tags: ["nocturnal", "forest", "sexually-dimorphic"],
+    blurb: "Jet-black and gold, carrying four thoracic horns plus one long cephalic horn — a tank among beetles.",
+    model: sketch("a949a2adb7394498b08786095b3b677c", "mohamedhussien", "Standard"),
+  },
+  {
+    id: "european-praying-mantis",
+    common: "European Praying Mantis",
+    latin: "Mantis religiosa",
+    class: "Insecta",
+    order: "Mantodea",
+    family: "Mantidae",
+    range: "Southern and central Europe and Asia; introduced to North America in 1899 and still spreading.",
+    diet: "Ambush predator of flies, crickets and moths; large females occasionally take small lizards or hummingbirds.",
+    role: "Mid-level predator regulating herbivorous insects; in turn feeds birds, spiders and small mammals.",
+    tags: ["predator", "ambush-hunter", "introduced"],
+    blurb: "The only insect that can look over its shoulder — a triangular head with stereo vision on a swivelling neck.",
+    model: sketch("ec088115ec8746d79c41f2db69665f15", "VirReal4", "CC BY"),
+  },
+  {
+    id: "luna-moth",
+    common: "Luna Moth",
+    latin: "Actias luna",
+    class: "Insecta",
+    order: "Lepidoptera",
+    family: "Saturniidae",
+    range: "Deciduous hardwood forests of eastern North America, from Canada to Florida and Texas.",
+    diet: "Adults never eat — they lack functional mouthparts. Larvae chew walnut, hickory, birch and sweetgum leaves.",
+    role: "Nocturnal pollinator and prey base; its hindwing tails spin in flight to deflect bat echolocation away from the body.",
+    tags: ["nocturnal", "silk-moth", "bat-evasion"],
+    blurb: "Lives about a week as an adult — just long enough to find a mate by moonlight. Scanned here from a Yale Peabody specimen.",
+    model: sketch("3444868c6e4c44b4b834c878ef142720", "Yale Peabody Museum", "CC BY"),
+  },
+  {
+    id: "european-stag-beetle",
+    common: "European Stag Beetle",
+    latin: "Lucanus cervus",
+    class: "Insecta",
+    order: "Coleoptera",
+    family: "Lucanidae",
+    range: "Oak and broadleaf woodlands across Europe to Asia Minor; declining and legally protected in many countries.",
+    diet: "Adults lick tree sap and juice of fallen fruit; larvae spend 3–7 years eating decaying oak stumps and roots.",
+    role: "Flagship saproxylic species — its grubs are primary recyclers of dead wood and an indicator of old-growth habitat.",
+    tags: ["saproxylic", "protected", "sexually-dimorphic"],
+    blurb: "The male's antler jaws are for show and wrestling, not biting — the real work is done underground by the larvae.",
+    model: sketch("e7d6ce6350fc4039a58cafe6d05d1c09", "mahrcheen", "Standard"),
+  },
+  {
+    id: "common-hawker",
+    common: "Common Hawker Dragonfly",
+    latin: "Aeshna juncea",
+    class: "Insecta",
+    order: "Odonata",
+    family: "Aeshnidae",
+    range: "Moorlands, bogs and lake edges across northern Eurasia; Holarctic, one of the most widespread hawkers.",
+    diet: "Aerial predator of midges and mosquitoes on the wing; aquatic nymphs hunt tadpoles and insect larvae.",
+    role: "Top invertebrate predator linking aquatic and terrestrial food webs; natural mosquito control.",
+    tags: ["predator", "wetland", "aerial-hunter"],
+    blurb: "Four wings beating out of phase give it helicopter control — hover, reverse, and 50 km/h passes over the peat bogs.",
+    model: sketch("b08203e16bd6401d80db9043ee776017", "julink", "Standard"),
+  },
+  {
+    id: "atlas-moth",
+    common: "Atlas Moth",
+    latin: "Attacus atlas",
+    class: "Insecta",
+    order: "Lepidoptera",
+    family: "Saturniidae",
+    range: "Tropical and subtropical forests of Southeast Asia, from India to Indonesia.",
+    diet: "Adults do not feed; larvae strip leaves of citrus, cinnamon, guava and jamun trees.",
+    role: "Among the largest moths on Earth (25–30 cm wingspan); wingtip patterns mimic a snake's head to startle predators.",
+    tags: ["giant", "nocturnal", "snake-mimic"],
+    blurb: "Its cocoons are so tough they are used as purses in Taiwan. A verified 3D model for this one is still on the wishlist.",
+    model: null,
+  },
 
-/* Species are added in Part 3B
-   and Part 3C */
-
+  /* -------------------------------- AVES -------------------------------- */
+  {
+    id: "barn-owl",
+    common: "Barn Owl",
+    latin: "Tyto alba",
+    class: "Aves",
+    order: "Strigiformes",
+    family: "Tytonidae",
+    range: "Nearly worldwide — every continent except Antarctica; absent only from polar and true desert regions.",
+    diet: "Small mammals, especially voles and mice, located by hearing alone in total darkness.",
+    role: "Nocturnal rodent control on farmland; its regurgitated pellets are a census of local small-mammal life.",
+    tags: ["nocturnal", "raptor", "rodent-control"],
+    blurb: "The heart-shaped face is a satellite dish: each ear hears a slightly different world, triangulated into a strike.",
+    model: sketch("0e65de5934db4f0eae02835ba7227dcc", "Virtual Museums of Małopolska", "CC0"),
+  },
+  {
+    id: "bald-eagle",
+    common: "Bald Eagle",
+    latin: "Haliaeetus leucocephalus",
+    class: "Aves",
+    order: "Accipitriformes",
+    family: "Accipitridae",
+    range: "North America, from Alaska to northern Mexico, always near fish-bearing water.",
+    diet: "Fish snatched from the surface; also waterfowl, carrion, and meals stolen from ospreys.",
+    role: "Apex predator and scavenger; its recovery from DDT-era collapse is a landmark of conservation law.",
+    tags: ["raptor", "apex-predator", "conservation"],
+    blurb: "Builds the largest nests of any North American bird — one in Ohio was used for 34 years and weighed two tonnes.",
+    model: sketch("707fff56fc93437c81c12674b4736f92", "Nestaeric", "Standard"),
+  },
+  {
+    id: "northern-cardinal",
+    common: "Northern Cardinal",
+    latin: "Cardinalis cardinalis",
+    class: "Aves",
+    order: "Passeriformes",
+    family: "Cardinalidae",
+    range: "Eastern and central North America, expanding northward with backyard feeders and warming winters.",
+    diet: "Seeds, grains and fruit cracked with a conical bill; nestlings are raised on insects.",
+    role: "Seed disperser and year-round songster — one of the few North American songbirds whose female also sings.",
+    tags: ["songbird", "seed-eater", "non-migratory"],
+    blurb: "The red comes from carotenoids in its diet: a drab cardinal is a hungry one. Scanned from a Florida Museum specimen.",
+    model: sketch("197da567899c4a07a0411a766252d324", "Florida Museum", "Standard"),
+  },
+  {
+    id: "blue-jay",
+    common: "Blue Jay",
+    latin: "Cyanocitta cristata",
+    class: "Aves",
+    order: "Passeriformes",
+    family: "Corvidae",
+    range: "Eastern and central North America, in oak woods, suburbs and parks.",
+    diet: "Acorns, nuts and seeds, plus insects and the occasional egg or nestling.",
+    role: "Oak-forest planter — a single jay caches thousands of acorns each autumn and forgets enough to plant groves.",
+    tags: ["corvid", "intelligent", "seed-disperser"],
+    blurb: "The blue is structural, not pigment — crush the feather and it turns brown. Scanned from the RISD Nature Lab collection.",
+    model: sketch("6408ce75336142c09e5069145b66180b", "RISD Nature Lab", "CC BY"),
+  },
+  {
+    id: "american-robin",
+    common: "American Robin",
+    latin: "Turdus migratorius",
+    class: "Aves",
+    order: "Passeriformes",
+    family: "Turdidae",
+    range: "All of North America, breeding to the treeline and wintering from the southern US into Mexico.",
+    diet: "Earthworms and insects hunted by sight on lawns; switches to fruit and berries in winter.",
+    role: "Soil-invertebrate predator and fruit disperser; its return north is a classic phenological marker of spring.",
+    tags: ["songbird", "omnivore", "migratory"],
+    blurb: "Cocks its head not to listen but to look — eyes on the sides of the skull watch the ground for worm-cast shadows.",
+    model: sketch("fdf2bde2c7344787a7044a944ddc05a5", "osuecampus", "CC BY"),
+  },
+  {
+    id: "peregrine-falcon",
+    common: "Peregrine Falcon",
+    latin: "Falco peregrinus",
+    class: "Aves",
+    order: "Falconiformes",
+    family: "Falconidae",
+    range: "Global — every continent except Antarctica, from Arctic cliffs to city skyscrapers.",
+    diet: "Medium-sized birds taken in flight, struck with balled talons at the end of a hunting stoop.",
+    role: "Apex aerial predator and urban adapter; the fastest animal on Earth, clocked past 380 km/h in a dive.",
+    tags: ["raptor", "apex-predator", "fastest-animal"],
+    blurb: "Baffles in its nostrils slow the rush of air so its lungs aren't damaged by the pressure of its own dive.",
+    model: sketch("f42f04daa38d4daf866b55b978079975", "Abby Crawford", "Standard"),
+  },
+  {
+    id: "common-raven",
+    common: "Common Raven",
+    latin: "Corvus corax",
+    class: "Aves",
+    order: "Passeriformes",
+    family: "Corvidae",
+    range: "Holarctic — mountains, forests, tundra, desert and coasts of the northern hemisphere.",
+    diet: "Omnivore and opportunist: carrion, insects, grain, eggs, refuse — cached and remembered.",
+    role: "Scavenger and ecosystem cleaner; among the most intelligent birds, capable of tools, play and planning.",
+    tags: ["corvid", "intelligent", "scavenger"],
+    blurb: "Pairs for life, flies upside-down for fun, and remembers the face of every human who has wronged it.",
+    model: sketch("ec9c0ac738fd4495af334ea2092e8d89", "Virtual Museums of Małopolska", "CC0"),
+  },
+  {
+    id: "ruby-throated-hummingbird",
+    common: "Ruby-throated Hummingbird",
+    latin: "Archilochus colubris",
+    class: "Aves",
+    order: "Apodiformes",
+    family: "Trochilidae",
+    range: "Eastern North America in summer; winters in Central America after a non-stop Gulf of Mexico crossing.",
+    diet: "Nectar from red tubular flowers, plus small insects and spiders for protein.",
+    role: "Specialist pollinator locked into co-evolved mutualisms with trumpet-shaped flowers.",
+    tags: ["pollinator", "migratory", "nectar-feeder"],
+    blurb: "A 3-gram bird with an 800 km open-water flight in it — wings beating 53 times a second the whole way.",
+    model: sketch("7efab9b136144230b862e45d3fe66f83", "Nestaeric", "Standard"),
+  },
+  {
+    id: "resplendent-quetzal",
+    common: "Resplendent Quetzal",
+    latin: "Pharomachrus mocinno",
+    class: "Aves",
+    order: "Trogoniformes",
+    family: "Trogonidae",
+    range: "Cloud forests from southern Mexico to western Panama, 1,200–3,000 m elevation.",
+    diet: "Wild avocados and other Lauraceae fruits, swallowed whole and regurgitated as seed; some insects and small frogs.",
+    role: "Seed disperser of cloud-forest trees and flagship species for Central American conservation; sacred to Maya and Aztec cultures.",
+    tags: ["cloud-forest", "fruit-eater", "flagship"],
+    blurb: "The male's tail streamers can reach a metre — feathers so prized that killing one was once forbidden on pain of death.",
+    model: null,
+  },
 ];
 
-/*
-==========================================================
- HELPER FUNCTIONS
-==========================================================
-*/
-
-function getSpecies(id){
-
-    return SPECIES.find(
-
-        species => species.id === id
-
-    );
-
-}
-
-function getFavorites(){
-
-    return JSON.parse(
-
-        localStorage.getItem(
-
-            STORAGE.FAVORITES
-
-        ) || "[]"
-
-    );
-
-}
-
-function saveFavorites(list){
-
-    localStorage.setItem(
-
-        STORAGE.FAVORITES,
-
-        JSON.stringify(list)
-
-    );
-
-}
-
-function getComparison(){
-
-    return JSON.parse(
-
-        localStorage.getItem(
-
-            STORAGE.COMPARISON
-
-        ) || "[]"
-
-    );
-
-}
-
-function saveComparison(list){
-
-    localStorage.setItem(
-
-        STORAGE.COMPARISON,
-
-        JSON.stringify(list)
-
-    );
-
-}
-
-function getNotes(){
-
-    return JSON.parse(
-
-        localStorage.getItem(
-
-            STORAGE.NOTES
-
-        ) || "{}"
-
-    );
-
-}
-
-function saveNotes(notes){
-
-    localStorage.setItem(
-
-        STORAGE.NOTES,
-
-        JSON.stringify(notes)
-
-    );
-
-}
-
-/*
-==========================================================
- GROUP BY CLASS > FAMILY
-
-Sidebar uses this.
-==========================================================
-*/
-
-function buildTree(){
-
-    const tree = {};
-
-    SPECIES.forEach(species => {
-
-        if(!tree[species.class]){
-
-            tree[species.class] = {};
-
-        }
-
-        if(!tree[species.class][species.family]){
-
-            tree[species.class][species.family] = [];
-
-        }
-
-        tree[species.class][species.family]
-
-            .push(species);
-
-    });
-
-    return tree;
-
-}
-
-/*
-==========================================================
- SORT
-==========================================================
-*/
-
-function sortSpecies(
-
-    list,
-
-    mode = "name"
-
-){
-
-    const items = [...list];
-
-    switch(mode){
-
-        case "family":
-
-            items.sort(
-
-                (a,b)=>
-
-                a.family.localeCompare(b.family)
-
-            );
-
-            break;
-
-        case "class":
-
-            items.sort(
-
-                (a,b)=>
-
-                a.class.localeCompare(b.class)
-
-            );
-
-            break;
-
-        default:
-
-            items.sort(
-
-                (a,b)=>
-
-                a.commonName.localeCompare(
-
-                    b.commonName
-
-                )
-
-            );
-
-    }
-
-    return items;
-
-}
-
-/*
-==========================================================
- SEARCH
-==========================================================
-*/
-
-function searchSpecies(query){
-
-    if(!query){
-
-        return SPECIES;
-
-    }
-
-    query = query.toLowerCase();
-
-    return SPECIES.filter(species => {
-
-        return (
-
-            species.commonName
-
-                .toLowerCase()
-
-                .includes(query)
-
-            ||
-
-            species.scientificName
-
-                .toLowerCase()
-
-                .includes(query)
-
-            ||
-
-            species.family
-
-                .toLowerCase()
-
-                .includes(query)
-
-            ||
-
-            species.class
-
-                .toLowerCase()
-
-                .includes(query)
-
-            ||
-
-            species.tags
-
-                .join(" ")
-
-                .toLowerCase()
-
-                .includes(query)
-
-            ||
-
-            species.keywords
-
-                .join(" ")
-
-                .toLowerCase()
-
-                .includes(query)
-
-        );
-
-    });
-
-}
-/*=========================================================
- WildGuide 3D
- data.js
- Part 3B
- Insect Species
-
- Append these INSIDE the SPECIES array from Part 3A.
- Add commas between objects as needed.
-=========================================================*/
-
-{
-    id: "monarch-butterfly",
-
-    commonName: "Monarch Butterfly",
-
-    scientificName: "Danaus plexippus",
-
-    class: "Insecta",
-
-    family: "Nymphalidae",
-
-    habitat: "Grasslands, meadows, gardens",
-
-    range: "North America, Central America",
-
-    diet: "Flower nectar (adult), milkweed (larva)",
-
-    ecologicalRole: "Pollinator",
-
-    conservation: "Endangered (IUCN)",
-
-    description:
-        "Famous migratory butterfly recognized by its bright orange wings with black veins.",
-
-    tags: [
-        "butterfly",
-        "pollinator",
-        "migration",
-        "orange"
-    ],
-
-    keywords: [
-        "monarch",
-        "danaus",
-        "milkweed"
-    ],
-
-    model:{
-
-        type: MODEL_TYPES.NONE,
-
-        src: "",
-
-        poster: "",
-
-        search:
-        "https://sketchfab.com/search?q=Danaus+plexippus&type=models"
-
-    }
-
-},
-
-{
-    id: "western-honey-bee",
-
-    commonName: "Western Honey Bee",
-
-    scientificName: "Apis mellifera",
-
-    class: "Insecta",
-
-    family: "Apidae",
-
-    habitat: "Gardens, forests, agricultural land",
-
-    range: "Worldwide",
-
-    diet: "Nectar and pollen",
-
-    ecologicalRole: "Major pollinator",
-
-    conservation: "Not Evaluated",
-
-    description:
-        "Social bee responsible for pollinating numerous crops and producing honey.",
-
-    tags:[
-        "bee",
-        "pollinator",
-        "honey"
-    ],
-
-    keywords:[
-        "apis",
-        "bee",
-        "honeybee"
-    ],
-
-    model:{
-
-        type: MODEL_TYPES.NONE,
-
-        src:"",
-
-        poster:"",
-
-        search:
-        "https://sketchfab.com/search?q=Apis+mellifera&type=models"
-
-    }
-
-},
-
-{
-    id:"ladybird",
-
-    commonName:"Seven-spotted Lady Beetle",
-
-    scientificName:"Coccinella septempunctata",
-
-    class:"Insecta",
-
-    family:"Coccinellidae",
-
-    habitat:"Fields, forests, gardens",
-
-    range:"Europe, Asia, North America",
-
-    diet:"Aphids",
-
-    ecologicalRole:"Natural pest control",
-
-    conservation:"Least Concern",
-
-    description:
-        "Predatory beetle valued for consuming agricultural pests.",
-
-    tags:[
-        "ladybug",
-        "beetle",
-        "predator"
-    ],
-
-    keywords:[
-        "ladybird",
-        "ladybug",
-        "coccinella"
-    ],
-
-    model:{
-
-        type:MODEL_TYPES.NONE,
-
-        src:"",
-
-        poster:"",
-
-        search:
-        "https://sketchfab.com/search?q=Coccinella+septempunctata&type=models"
-
-    }
-
-},
-
-{
-    id:"green-darner",
-
-    commonName:"Green Darner",
-
-    scientificName:"Anax junius",
-
-    class:"Insecta",
-
-    family:"Aeshnidae",
-
-    habitat:"Wetlands, lakes, ponds",
-
-    range:"North America",
-
-    diet:"Flying insects",
-
-    ecologicalRole:"Predator",
-
-    conservation:"Least Concern",
-
-    description:
-        "Large dragonfly capable of long-distance migration.",
-
-    tags:[
-        "dragonfly",
-        "predator",
-        "wetlands"
-    ],
-
-    keywords:[
-        "anax",
-        "darner"
-    ],
-
-    model:{
-
-        type:MODEL_TYPES.NONE,
-
-        src:"",
-
-        poster:"",
-
-        search:
-        "https://sketchfab.com/search?q=Anax+junius&type=models"
-
-    }
-
-},
-
-{
-    id:"praying-mantis",
-
-    commonName:"European Praying Mantis",
-
-    scientificName:"Mantis religiosa",
-
-    class:"Insecta",
-
-    family:"Mantidae",
-
-    habitat:"Grasslands, shrubs",
-
-    range:"Europe, Asia, Africa",
-
-    diet:"Insects",
-
-    ecologicalRole:"Predator",
-
-    conservation:"Least Concern",
-
-    description:
-        "Ambush predator with folded forelegs adapted for catching prey.",
-
-    tags:[
-        "mantis",
-        "predator",
-        "camouflage"
-    ],
-
-    keywords:[
-        "mantis",
-        "religiosa"
-    ],
-
-    model:{
-
-        type:MODEL_TYPES.NONE,
-
-        src:"",
-
-        poster:"",
-
-        search:
-        "https://sketchfab.com/search?q=Mantis+religiosa&type=models"
-
-    }
-
-},
-
-{
-    id:"atlas-moth",
-
-    commonName:"Atlas Moth",
-
-    scientificName:"Attacus atlas",
-
-    class:"Insecta",
-
-    family:"Saturniidae",
-
-    habitat:"Tropical forests",
-
-    range:"South and Southeast Asia",
-
-    diet:"Adults do not feed",
-
-    ecologicalRole:"Prey species",
-
-    conservation:"Not Evaluated",
-
-    description:
-        "One of the world's largest moths by wing surface area.",
-
-    tags:[
-        "moth",
-        "giant",
-        "asia"
-    ],
-
-    keywords:[
-        "atlas",
-        "attacus"
-    ],
-
-    model:{
-
-        type:MODEL_TYPES.NONE,
-
-        src:"",
-
-        poster:"",
-
-        search:
-        "https://sketchfab.com/search?q=Attacus+atlas&type=models"
-
-    }
-
-},
-
-{
-    id:"stag-beetle",
-
-    commonName:"European Stag Beetle",
-
-    scientificName:"Lucanus cervus",
-
-    class:"Insecta",
-
-    family:"Lucanidae",
-
-    habitat:"Woodlands",
-
-    range:"Europe",
-
-    diet:"Tree sap",
-
-    ecologicalRole:"Wood decomposer",
-
-    conservation:"Near Threatened",
-
-    description:
-        "Large beetle known for the male's antler-like mandibles.",
-
-    tags:[
-        "beetle",
-        "woodland"
-    ],
-
-    keywords:[
-        "stag",
-        "lucanus"
-    ],
-
-    model:{
-
-        type:MODEL_TYPES.NONE,
-
-        src:"",
-
-        poster:"",
-
-        search:
-        "https://sketchfab.com/search?q=Lucanus+cervus&type=models"
-
-    }
-
-},
-
-{
-    id:"firefly",
-
-    commonName:"Common Eastern Firefly",
-
-    scientificName:"Photinus pyralis",
-
-    class:"Insecta",
-
-    family:"Lampyridae",
-
-    habitat:"Fields, forests",
-
-    range:"North America",
-
-    diet:"Small insects, nectar",
-
-    ecologicalRole:"Predator",
-
-    conservation:"Least Concern",
-
-    description:
-        "Bioluminescent beetle using flashing signals during courtship.",
-
-    tags:[
-        "firefly",
-        "glowing",
-        "bioluminescence"
-    ],
-
-    keywords:[
-        "photinus",
-        "lightning bug"
-    ],
-
-    model:{
-
-        type:MODEL_TYPES.NONE,
-
-        src:"",
-
-        poster:"",
-
-        search:
-        "https://sketchfab.com/search?q=Photinus+pyralis&type=models"
-
-    }
-
-}
-/*=========================================================
- WildGuide 3D
- data.js
- Part 3C
- Bird Species
-
- Append these INSIDE the SPECIES array
- after the insect species from Part 3B.
-=========================================================*/
-
-{
-    id: "bald-eagle",
-
-    commonName: "Bald Eagle",
-
-    scientificName: "Haliaeetus leucocephalus",
-
-    class: "Aves",
-
-    family: "Accipitridae",
-
-    habitat: "Lakes, rivers, coastal forests",
-
-    range: "North America",
-
-    diet: "Fish, waterfowl, carrion",
-
-    ecologicalRole: "Apex predator and scavenger",
-
-    conservation: "Least Concern",
-
-    description:
-        "Large bird of prey and the national bird of the United States, recognized by its white head and powerful yellow beak.",
-
-    tags: [
-        "raptor",
-        "eagle",
-        "predator"
-    ],
-
-    keywords: [
-        "bald eagle",
-        "haliaeetus",
-        "bird of prey"
-    ],
-
-    model: {
-
-        type: MODEL_TYPES.NONE,
-
-        src: "",
-
-        poster: "",
-
-        search:
-        "https://sketchfab.com/search?q=Bald+Eagle&type=models"
-
-    }
-
-},
-
-{
-    id: "barn-owl",
-
-    commonName: "Barn Owl",
-
-    scientificName: "Tyto alba",
-
-    class: "Aves",
-
-    family: "Tytonidae",
-
-    habitat: "Grasslands, farmland, open woodland",
-
-    range: "Worldwide",
-
-    diet: "Rodents, small mammals",
-
-    ecologicalRole: "Nocturnal predator",
-
-    conservation: "Least Concern",
-
-    description:
-        "Nocturnal owl with a heart-shaped facial disc and silent flight.",
-
-    tags: [
-        "owl",
-        "nocturnal",
-        "raptor"
-    ],
-
-    keywords: [
-        "barn owl",
-        "tyto"
-    ],
-
-    model: {
-
-        type: MODEL_TYPES.NONE,
-
-        src: "",
-
-        poster: "",
-
-        search:
-        "https://sketchfab.com/search?q=Barn+Owl&type=models"
-
-    }
-
-},
-
-{
-    id: "house-sparrow",
-
-    commonName: "House Sparrow",
-
-    scientificName: "Passer domesticus",
-
-    class: "Aves",
-
-    family: "Passeridae",
-
-    habitat: "Cities, villages, farmland",
-
-    range: "Worldwide",
-
-    diet: "Seeds, grains, insects",
-
-    ecologicalRole: "Seed disperser",
-
-    conservation: "Least Concern",
-
-    description:
-        "One of the world's most familiar urban birds, highly adapted to living alongside humans.",
-
-    tags: [
-        "songbird",
-        "urban"
-    ],
-
-    keywords: [
-        "sparrow",
-        "passer"
-    ],
-
-    model: {
-
-        type: MODEL_TYPES.NONE,
-
-        src: "",
-
-        poster: "",
-
-        search:
-        "https://sketchfab.com/search?q=House+Sparrow&type=models"
-
-    }
-
-},
-
-{
-    id: "ruby-throated-hummingbird",
-
-    commonName: "Ruby-throated Hummingbird",
-
-    scientificName: "Archilochus colubris",
-
-    class: "Aves",
-
-    family: "Trochilidae",
-
-    habitat: "Woodlands, gardens",
-
-    range: "Eastern North America",
-
-    diet: "Nectar and insects",
-
-    ecologicalRole: "Pollinator",
-
-    conservation: "Least Concern",
-
-    description:
-        "Tiny hovering bird capable of rapid wingbeats and backward flight.",
-
-    tags: [
-        "hummingbird",
-        "pollinator",
-        "nectar"
-    ],
-
-    keywords: [
-        "ruby",
-        "hummingbird"
-    ],
-
-    model: {
-
-        type: MODEL_TYPES.NONE,
-
-        src: "",
-
-        poster: "",
-
-        search:
-        "https://sketchfab.com/search?q=Ruby+throated+Hummingbird&type=models"
-
-    }
-
-},
-
-{
-    id: "common-kingfisher",
-
-    commonName: "Common Kingfisher",
-
-    scientificName: "Alcedo atthis",
-
-    class: "Aves",
-
-    family: "Alcedinidae",
-
-    habitat: "Rivers, streams, lakes",
-
-    range: "Europe, Asia, North Africa",
-
-    diet: "Fish and aquatic insects",
-
-    ecologicalRole: "Aquatic predator",
-
-    conservation: "Least Concern",
-
-    description:
-        "Small brightly colored bird famous for diving into water to catch fish.",
-
-    tags: [
-        "kingfisher",
-        "fish",
-        "river"
-    ],
-
-    keywords: [
-        "alcedo",
-        "kingfisher"
-    ],
-
-    model: {
-
-        type: MODEL_TYPES.NONE,
-
-        src: "",
-
-        poster: "",
-
-        search:
-        "https://sketchfab.com/search?q=Common+Kingfisher&type=models"
-
-    }
-
-},
-
-{
-    id: "indian-peafowl",
-
-    commonName: "Indian Peafowl",
-
-    scientificName: "Pavo cristatus",
-
-    class: "Aves",
-
-    family: "Phasianidae",
-
-    habitat: "Forests, scrubland, farmland",
-
-    range: "Indian Subcontinent",
-
-    diet: "Seeds, insects, reptiles",
-
-    ecologicalRole: "Omnivore",
-
-    conservation: "Least Concern",
-
-    description:
-        "Large colorful bird known for the spectacular iridescent train displayed by males.",
-
-    tags: [
-        "peacock",
-        "colorful",
-        "india"
-    ],
-
-    keywords: [
-        "peafowl",
-        "pavo",
-        "peacock"
-    ],
-
-    model: {
-
-        type: MODEL_TYPES.NONE,
-
-        src: "",
-
-        poster: "",
-
-        search:
-        "https://sketchfab.com/search?q=Indian+Peafowl&type=models"
-
-    }
-
-},
-
-{
-    id: "greater-flamingo",
-
-    commonName: "Greater Flamingo",
-
-    scientificName: "Phoenicopterus roseus",
-
-    class: "Aves",
-
-    family: "Phoenicopteridae",
-
-    habitat: "Salt lakes, lagoons, wetlands",
-
-    range: "Africa, Southern Europe, Asia",
-
-    diet: "Algae, crustaceans",
-
-    ecologicalRole: "Filter feeder",
-
-    conservation: "Least Concern",
-
-    description:
-        "Tall pink wading bird with a distinctive downturned bill specialized for filter feeding.",
-
-    tags: [
-        "flamingo",
-        "wetlands",
-        "pink"
-    ],
-
-    keywords: [
-        "phoenicopterus",
-        "flamingo"
-    ],
-
-    model: {
-
-        type: MODEL_TYPES.NONE,
-
-        src: "",
-
-        poster: "",
-
-        search:
-        "https://sketchfab.com/search?q=Greater+Flamingo&type=models"
-
-    }
-
-},
-
-{
-    id: "emperor-penguin",
-
-    commonName: "Emperor Penguin",
-
-    scientificName: "Aptenodytes forsteri",
-
-    class: "Aves",
-
-    family: "Spheniscidae",
-
-    habitat: "Antarctic sea ice",
-
-    range: "Antarctica",
-
-    diet: "Fish, squid, krill",
-
-    ecologicalRole: "Marine predator",
-
-    conservation: "Near Threatened",
-
-    description:
-        "The tallest and heaviest living penguin species, adapted to extreme Antarctic conditions.",
-
-    tags: [
-        "penguin",
-        "antarctica",
-        "marine"
-    ],
-
-    keywords: [
-        "emperor penguin",
-        "aptenodytes"
-    ],
-
-    model: {
-
-        type: MODEL_TYPES.NONE,
-
-        src: "",
-
-        poster: "",
-
-        search:
-        "https://sketchfab.com/search?q=Emperor+Penguin&type=models"
-
-    }
-
-}
-/*=========================================================
- WildGuide 3D
- data.js
- Part 3D
-
- Append AFTER the SPECIES array and helper functions.
-=========================================================*/
-
-/*=========================================================
- LOOKUP MAPS
-=========================================================*/
-
-const SPECIES_BY_ID = new Map(
-    SPECIES.map(species => [species.id, species])
-);
-
-const SPECIES_BY_CLASS = {};
-
-const SPECIES_BY_FAMILY = {};
-
-SPECIES.forEach(species => {
-
-    if (!SPECIES_BY_CLASS[species.class]) {
-
-        SPECIES_BY_CLASS[species.class] = [];
-
-    }
-
-    SPECIES_BY_CLASS[species.class].push(species);
-
-    if (!SPECIES_BY_FAMILY[species.family]) {
-
-        SPECIES_BY_FAMILY[species.family] = [];
-
-    }
-
-    SPECIES_BY_FAMILY[species.family].push(species);
-
-});
-
-
-/*=========================================================
- SIDEBAR TREE
-=========================================================*/
-
-const SIDEBAR_TREE = buildTree();
-
-
-/*=========================================================
- TAG INDEX
-=========================================================*/
-
-const TAG_INDEX = {};
-
-SPECIES.forEach(species => {
-
-    species.tags.forEach(tag => {
-
-        if (!TAG_INDEX[tag]) {
-
-            TAG_INDEX[tag] = [];
-
-        }
-
-        TAG_INDEX[tag].push(species.id);
-
-    });
-
-});
-
-
-/*=========================================================
- SEARCH INDEX
-=========================================================*/
-
-const SEARCH_INDEX = SPECIES.map(species => ({
-
-    id: species.id,
-
-    text: [
-
-        species.commonName,
-
-        species.scientificName,
-
-        species.class,
-
-        species.family,
-
-        species.habitat,
-
-        species.range,
-
-        species.diet,
-
-        species.ecologicalRole,
-
-        species.conservation,
-
-        ...(species.tags || []),
-
-        ...(species.keywords || [])
-
-    ]
-
-        .join(" ")
-
-        .toLowerCase()
-
-}));
-
-
-function searchIndex(query){
-
-    if(!query){
-
-        return SPECIES;
-
-    }
-
-    const q = query.toLowerCase().trim();
-
-    return SEARCH_INDEX
-
-        .filter(item => item.text.includes(q))
-
-        .map(item => SPECIES_BY_ID.get(item.id));
-
-}
-
-
-/*=========================================================
- MODEL HELPERS
-=========================================================*/
-
-function hasVerifiedModel(species){
-
-    return (
-
-        species.model &&
-
-        species.model.type !== MODEL_TYPES.NONE &&
-
-        species.model.src
-
-    );
-
-}
-
-
-function getModelData(id){
-
-    const species = getSpecies(id);
-
-    if(!species){
-
-        return null;
-
-    }
-
-    return species.model;
-
-}
-
-
-function getFallbackModelLink(species){
-
-    if(
-
-        species.model &&
-
-        species.model.search
-
-    ){
-
-        return species.model.search;
-
-    }
-
-    return `https://sketchfab.com/search?q=${encodeURIComponent(
-        species.scientificName
-    )}&type=models`;
-
-}
-
-
-/*=========================================================
- NOTEBOOK HELPERS
-=========================================================*/
-
-function getSpeciesNote(id){
-
-    const notes = getNotes();
-
-    return notes[id] || "";
-
-}
-
-
-function saveSpeciesNote(id,text){
-
-    const notes = getNotes();
-
-    notes[id] = text;
-
-    saveNotes(notes);
-
-}
-
-
-/*=========================================================
- FAVORITES
-=========================================================*/
-
-function isFavorite(id){
-
-    return getFavorites().includes(id);
-
-}
-
-
-function toggleFavorite(id){
-
-    const favorites = getFavorites();
-
-    const index = favorites.indexOf(id);
-
-    if(index === -1){
-
-        favorites.push(id);
-
-    }else{
-
-        favorites.splice(index,1);
-
-    }
-
-    saveFavorites(favorites);
-
-    return favorites;
-
-}
-
-
-/*=========================================================
- COMPARISON
-=========================================================*/
-
-function addComparison(id){
-
-    const compare = getComparison();
-
-    if(compare.includes(id)){
-
-        return compare;
-
-    }
-
-    if(compare.length >= APP.maxComparison){
-
-        compare.shift();
-
-    }
-
-    compare.push(id);
-
-    saveComparison(compare);
-
-    return compare;
-
-}
-
-
-function removeComparison(id){
-
-    const compare = getComparison()
-
-        .filter(item => item !== id);
-
-    saveComparison(compare);
-
-    return compare;
-
-}
-
-
-function clearComparison(){
-
-    saveComparison([]);
-
-}
-
-
-/*=========================================================
- SORT MODES
-=========================================================*/
-
-const SORT_MODES = {
-
-    name(list){
-
-        return [...list].sort(
-
-            (a,b)=>
-
-            a.commonName.localeCompare(
-
-                b.commonName
-
-            )
-
-        );
-
-    },
-
-    scientific(list){
-
-        return [...list].sort(
-
-            (a,b)=>
-
-            a.scientificName.localeCompare(
-
-                b.scientificName
-
-            )
-
-        );
-
-    },
-
-    family(list){
-
-        return [...list].sort(
-
-            (a,b)=>
-
-            a.family.localeCompare(
-
-                b.family
-
-            )
-
-        );
-
-    },
-
-    class(list){
-
-        return [...list].sort(
-
-            (a,b)=>
-
-            a.class.localeCompare(
-
-                b.class
-
-            )
-
-        );
-
-    }
-
+/* Meta used by the sidebar header and home view. */
+const GUIDE_META = {
+  title: "Field Guide",
+  volume: "Vol. I — Insecta & Aves",
+  compiled: "2026 edition",
 };
 
-
-/*=========================================================
- STATISTICS
-=========================================================*/
-
-const DATABASE_STATS = {
-
-    totalSpecies: SPECIES.length,
-
-    totalClasses:
-
-        Object.keys(SPECIES_BY_CLASS).length,
-
-    totalFamilies:
-
-        Object.keys(SPECIES_BY_FAMILY).length,
-
-    speciesWithModels:
-
-        SPECIES.filter(
-
-            hasVerifiedModel
-
-        ).length,
-
-    speciesWithoutModels:
-
-        SPECIES.filter(
-
-            s => !hasVerifiedModel(s)
-
-        ).length
-
-};
-
-
-/*=========================================================
- OPTIONAL GLOBAL EXPORTS
-=========================================================*/
-
-window.WildGuide = {
-
-    APP,
-
-    STORAGE,
-
-    MODEL_TYPES,
-
-    SPECIES,
-
-    SIDEBAR_TREE,
-
-    SEARCH_INDEX,
-
-    DATABASE_STATS,
-
-    SORT_MODES,
-
-    buildTree,
-
-    searchSpecies,
-
-    searchIndex,
-
-    sortSpecies,
-
-    getSpecies,
-
-    getSpeciesNote,
-
-    saveSpeciesNote,
-
-    toggleFavorite,
-
-    isFavorite,
-
-    addComparison,
-
-    removeComparison,
-
-    clearComparison,
-
-    hasVerifiedModel,
-
-    getModelData,
-
-    getFallbackModelLink
-
-};
-
-
-/*=========================================================
- END OF data.js
-=========================================================*/
+/* Light schema check: warns in the console if an entry is malformed,
+   so adding a species stays foolproof. */
+(function validateSpecies() {
+  const required = ["id", "common", "latin", "class", "order", "family", "range", "diet", "role", "tags", "blurb"];
+  SPECIES.forEach((s, i) => {
+    required.forEach((k) => {
+      if (s[k] === undefined) console.warn(`[field-guide] species #${i} (${s.id || "?"}) is missing “${k}”`);
+    });
+    if (s.model && !["sketchfab", "glb"].includes(s.model.type)) {
+      console.warn(`[field-guide] ${s.id}: unknown model type — use sketch(), glb(), or null`);
+    }
+  });
+})();
